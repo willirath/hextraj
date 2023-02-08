@@ -5,6 +5,7 @@ dependencies:
   - python=3.11
   - git
   - ipython
+  - netcdf4
   - numpy
   - pre-commit
   - pyproj

@@ -5,6 +5,7 @@ dependencies:
   - python=3.11
   ############## These will have to be adjusted to your specific project
   - numpy
+  - pyproj
   - scipy
   - xarray
   ##############

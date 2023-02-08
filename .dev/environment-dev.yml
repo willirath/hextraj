@@ -3,13 +3,14 @@ channels:
   - conda-forge
 dependencies:
   - python=3.11
-  ############## These will have to be adjusted to your specific project
+  - git
+  - ipython
   - numpy
+  - pre-commit
   - pyproj
+  - pytest
   - scipy
   - xarray
-  ##############
-  - pytest
   - pip:
       - codecov
       - pytest-cov

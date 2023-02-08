@@ -1,6 +1,6 @@
 import pytest
 
-from hextraj.hexapi import HexGrid
+from hextraj.hexgrid import HexGrid
 
 
 @pytest.mark.parametrize("orientation", ["flat", "pointy"])

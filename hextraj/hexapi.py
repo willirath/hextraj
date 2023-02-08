@@ -1,4 +1,5 @@
 import pyproj
+
 from . import redblobhex
 
 
@@ -9,7 +10,7 @@ class HexGrid(object):
         lon_origin: float = 0.0,
         lat_origin: float = 0.0,
         hex_size_meters: float = 100_000,
-        hex_orientation: str = "flat"
+        hex_orientation: str = "flat",
     ):
         """HexGrid Labeller.
 
@@ -24,8 +25,8 @@ class HexGrid(object):
         hex_size_meters: float
             Defaults to: 100000.0
         hex_orientation: str
-            Can be "flat" or "pointy". Defaults to: "flat"        
-        
+            Can be "flat" or "pointy". Defaults to: "flat"
+
         """
         self.projection_name = projection_name
         self.lat_origin = lat_origin
@@ -40,10 +41,12 @@ class HexGrid(object):
         """Initialize projection."""
         self.proj = pyproj.Proj(
             "+proj={projection_name} +lat_0={lat_origin} +lon_0={lon_origin} +datum=WGS84 +units=m".format(
-                projection_name=self.projection_name, lat_origin=self.lat_origin, lon_origin=self.lon_origin,
+                projection_name=self.projection_name,
+                lat_origin=self.lat_origin,
+                lon_origin=self.lon_origin,
             )
         )
-        proj_wgs = pyproj.Proj(init='epsg:4326')
+        proj_wgs = pyproj.Proj(init="epsg:4326")
         self.transformer_relto_wgs = pyproj.Transformer.from_proj(proj_wgs, self.proj)
 
     def _set_up_hex_layout(self):
@@ -62,14 +65,20 @@ class HexGrid(object):
         )
 
     def _transform_lon_lat_to_proj(self, lon: float = None, lat: float = None):
-        return redblobhex.Point(*self.transform_lon_lat_to_proj(lon, lat, pyproj.enums.TransformDirection.FORWARD))
+        return redblobhex.Point(
+            *self.transformer_relto_wgs.transform(
+                lon, lat, direction=pyproj.enums.TransformDirection.FORWARD
+            )
+        )
 
     def _transform_proj_to_lon_lat(self, x: float = None, y: float = None):
-        return self.transform_lon_lat_to_proj(x, y, pyproj.enums.TransformDirection.INVERSE)
+        return self.transformer_relto_wgs.transform(
+            x, y, direction=pyproj.enums.TransformDirection.INVERSE
+        )
 
     def lon_lat_to_hex(self, lon: float = None, lat: float = None) -> redblobhex._Hex:
         """Point in lon lat to hex.
-        
+
         Parameters
         ----------
         lon: float
@@ -82,5 +91,7 @@ class HexGrid(object):
         Hex tuple.
         """
         xy_projected = self._transform_lon_lat_to_proj(lon=lon, lat=lat)
-        hex_tuple = redblobhex.hex_round(redblobhex.pixel_to_hex(self.hex_layout_projected, xy_projected))
+        hex_tuple = redblobhex.hex_round(
+            redblobhex.pixel_to_hex(self.hex_layout_projected, xy_projected)
+        )
         return hex_tuple

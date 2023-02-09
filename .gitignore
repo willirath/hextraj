@@ -89,3 +89,4 @@ target/
 
 # Mypy cache
 .mypy_cache/
+_version.py

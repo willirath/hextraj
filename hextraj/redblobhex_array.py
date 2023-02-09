@@ -1,6 +1,9 @@
 from typing import NamedTuple
+
 import numpy as np
+
 from numpy.typing import NDArray
+
 
 class Hex(NamedTuple):
     q: NDArray  # all of the same shape
@@ -18,9 +21,8 @@ class Hex(NamedTuple):
 
     def _check_valid_shapes(self):
         """Check if all coords have the same shape."""
-        return (
-            (np.array(self.q).shape == np.array(self.r).shape)
-            & (np.array(self.q).shape == np.array(self.s).shape)
+        return (np.array(self.q).shape == np.array(self.r).shape) & (
+            np.array(self.q).shape == np.array(self.s).shape
         )
 
     def __eq__(self, other):
@@ -29,6 +31,7 @@ class Hex(NamedTuple):
             & np.array_equal(self.r, other.r)
             & np.array_equal(self.s, other.s)
         )
+
 
 class Point(NamedTuple):
     x: float
@@ -72,7 +75,7 @@ orientation_flat = Orientation(
     np.sqrt(3.0) / 3.0,
     0.0,
 )
- 
+
 
 class Layout(NamedTuple):
     orientation: Orientation
@@ -100,7 +103,7 @@ def hex_round(hex: Hex):
             (q_diff > r_diff) & (q_diff > s_diff),
             -ri - si,
             qi,
-        ), 
+        ),
         np.where(
             ~((q_diff > r_diff) & (q_diff > s_diff)) & (r_diff > s_diff),
             -qi - si,
@@ -110,7 +113,7 @@ def hex_round(hex: Hex):
             ~((q_diff > r_diff) & (q_diff > s_diff)) & ~(r_diff > s_diff),
             -qi - ri,
             si,
-        )
+        ),
     )
     qi, ri, si = qi[()], ri[()], si[()]
     return Hex(qi, ri, si)

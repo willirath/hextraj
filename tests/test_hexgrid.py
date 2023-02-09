@@ -1,9 +1,9 @@
+import numpy as np
 import pytest
 
 from hextraj.hexgrid import HexGrid
 from hextraj.redblobhex_array import Hex
 
-import numpy as np
 
 @pytest.mark.parametrize("orientation", ["flat", "pointy"])
 @pytest.mark.parametrize("point_dtype", ["scalar", "array"])

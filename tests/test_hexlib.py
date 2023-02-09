@@ -1,9 +1,16 @@
-from hextraj.redblobhex_array import Hex, Layout, orientation_flat, Point, hex_corner_offset
-
 import numpy as np
-import xarray as xr
-from dask import array as darr
 import pandas as pd
+import xarray as xr
+
+from dask import array as darr
+
+from hextraj.redblobhex_array import (
+    Hex,
+    Layout,
+    Point,
+    hex_corner_offset,
+    orientation_flat,
+)
 
 
 def test_validity_check_scalars():
@@ -12,13 +19,77 @@ def test_validity_check_scalars():
 
 
 def test_validity_check_numpy_arrays():
-    assert Hex(np.array([1, ]), np.array([2, ]), np.array([- 3, ]))._check_valid()
-    assert not Hex(np.array([1, ]), np.array([2, ]), np.array([3, ]))._check_valid()
+    assert Hex(
+        np.array(
+            [
+                1,
+            ]
+        ),
+        np.array(
+            [
+                2,
+            ]
+        ),
+        np.array(
+            [
+                -3,
+            ]
+        ),
+    )._check_valid()
+    assert not Hex(
+        np.array(
+            [
+                1,
+            ]
+        ),
+        np.array(
+            [
+                2,
+            ]
+        ),
+        np.array(
+            [
+                3,
+            ]
+        ),
+    )._check_valid()
 
 
 def test_validity_check_dask_arrays():
-    assert Hex(darr.array([1, ]), darr.array([2, ]), darr.array([- 3, ]))._check_valid()
-    assert not Hex(darr.array([1, ]), darr.array([2, ]), darr.array([3, ]))._check_valid()
+    assert Hex(
+        darr.array(
+            [
+                1,
+            ]
+        ),
+        darr.array(
+            [
+                2,
+            ]
+        ),
+        darr.array(
+            [
+                -3,
+            ]
+        ),
+    )._check_valid()
+    assert not Hex(
+        darr.array(
+            [
+                1,
+            ]
+        ),
+        darr.array(
+            [
+                2,
+            ]
+        ),
+        darr.array(
+            [
+                3,
+            ]
+        ),
+    )._check_valid()
 
 
 def test_validity_check_pandas_series():
@@ -36,7 +107,23 @@ def test_validity_check_xr_dataarrays():
     assert not Hex(q, r, -s)._check_valid()
 
     # arrays
-    q, r, s = xr.DataArray([1, ]), xr.DataArray([2, ]), xr.DataArray([-3, ])
+    q, r, s = (
+        xr.DataArray(
+            [
+                1,
+            ]
+        ),
+        xr.DataArray(
+            [
+                2,
+            ]
+        ),
+        xr.DataArray(
+            [
+                -3,
+            ]
+        ),
+    )
     assert Hex(q, r, s)._check_valid()
     assert not Hex(q, r, -s)._check_valid()
 
@@ -70,5 +157,13 @@ def test_hex_corner_offset_flat():
     )
     np.testing.assert_array_almost_equal(
         corners.y,
-        [0, -np.sin(np.deg2rad(60)), -np.sin(np.deg2rad(60)), 0, np.sin(np.deg2rad(60)), np.sin(np.deg2rad(60)), 0],
+        [
+            0,
+            -np.sin(np.deg2rad(60)),
+            -np.sin(np.deg2rad(60)),
+            0,
+            np.sin(np.deg2rad(60)),
+            np.sin(np.deg2rad(60)),
+            0,
+        ],
     )

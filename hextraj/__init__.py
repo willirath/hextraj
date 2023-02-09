@@ -1,1 +1,1 @@
-from .hexgrid import HexGrid
+from .hexproj import HexProj

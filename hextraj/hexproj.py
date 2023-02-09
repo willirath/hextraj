@@ -3,7 +3,7 @@ import pyproj
 from . import redblobhex_array as redblobhex
 
 
-class HexGrid(object):
+class HexProj(object):
     def __init__(
         self,
         projection_name: str = "laea",
@@ -12,7 +12,7 @@ class HexGrid(object):
         hex_size_meters: float = 100_000,
         hex_orientation: str = "flat",
     ):
-        """HexGrid Labeller.
+        """HexProj Labeller.
 
         Parameters
         ----------

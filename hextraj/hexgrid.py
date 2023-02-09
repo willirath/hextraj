@@ -1,6 +1,6 @@
 import pyproj
 
-from . import redblobhex
+from . import redblobhex_array as redblobhex
 
 
 class HexGrid(object):
@@ -52,9 +52,9 @@ class HexGrid(object):
     def _set_up_hex_layout(self):
         """Set up hex layout (in projected space!)."""
         if self.hex_orientation == "flat":
-            _orientation = redblobhex.layout_flat
+            _orientation = redblobhex.orientation_flat
         elif self.hex_orientation == "pointy":
-            _orientation = redblobhex.layout_pointy
+            _orientation = redblobhex.orientation_pointy
         else:
             raise ValueError("Only 'flat' and 'pointy' orientation is supported.")
 
@@ -62,6 +62,10 @@ class HexGrid(object):
             orientation=_orientation,
             size=redblobhex.Point(self.hex_size_meters, self.hex_size_meters),
             origin=redblobhex.Point(0, 0),  # always at center of projected space
+        )
+
+        self.corner_offsets_projected = tuple(
+            redblobhex.hex_corner_offset(self.hex_layout_projected, c) for c in range(7)
         )
 
     def _transform_lon_lat_to_proj(self, lon: float = None, lat: float = None):
@@ -76,8 +80,8 @@ class HexGrid(object):
             x, y, direction=pyproj.enums.TransformDirection.INVERSE
         )
 
-    def lon_lat_to_hex(self, lon: float = None, lat: float = None) -> redblobhex._Hex:
-        """Point in lon lat to hex.
+    def lon_lat_to_hex(self, lon: float = None, lat: float = None) -> redblobhex.Hex:
+        """Point in lon lat to hex tuple.
 
         Parameters
         ----------
@@ -95,3 +99,67 @@ class HexGrid(object):
             redblobhex.pixel_to_hex(self.hex_layout_projected, xy_projected)
         )
         return hex_tuple
+
+    def hex_to_lon_lat(self, hex_tuple: redblobhex.Hex = None):
+        """Hex tuple to lon, lat.
+
+        Parameters
+        ----------
+        hex_tuple: tuple
+            Hex tuple.
+
+        Returns
+        -------
+        tuple
+            lon, lat
+        """
+        hex_center_projected = redblobhex.hex_to_pixel(
+            self.hex_layout_projected, hex_tuple
+        )
+        return self._transform_proj_to_lon_lat(*hex_center_projected)
+
+    def hex_corners_lon_lat(self, hex_tuple: redblobhex.Hex = None):
+        """Hex tuple to corner lon, lat.
+
+        Parameters
+        ----------
+        hex_tuple: tuple
+            Hex tuple.
+
+        Returns
+        -------
+        list
+            List of (lon, lat) tuples of corners.
+        """
+        hex_center_projected = redblobhex.hex_to_pixel(
+            self.hex_layout_projected, hex_tuple
+        )
+        corners_projected = tuple(
+            redblobhex.Point(
+                hex_center_projected.x + cop.x, hex_center_projected.y + cop.y
+            )
+            for cop in self.corner_offsets_projected
+        )
+        corners_lon_lat = [
+            self._transform_proj_to_lon_lat(c.x, c.y) for c in corners_projected
+        ]
+        return corners_lon_lat
+
+    def hex_of_hexes(self, map_radius: int = 2):
+        """Generate collection of hexes which fill a hex centered about (0, 0, 0).
+
+        Parameters
+        ----------
+        map_radius: int
+           Defaults to: 2
+
+        Returns
+        -------
+        generator
+           List of hex tuples.
+        """
+        for q in range(-map_radius, map_radius + 1):
+            r1 = max(-map_radius, -q - map_radius)
+            r2 = min(map_radius, -q + map_radius)
+            for r in range(r1, r2 + 1):
+                yield redblobhex.Hex(q, r, -q - r)

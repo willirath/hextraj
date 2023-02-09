@@ -1,6 +1,6 @@
 import pyproj
 
-from . import redblobhex
+from . import redblobhex_array as redblobhex
 
 
 class HexGrid(object):
@@ -52,9 +52,9 @@ class HexGrid(object):
     def _set_up_hex_layout(self):
         """Set up hex layout (in projected space!)."""
         if self.hex_orientation == "flat":
-            _orientation = redblobhex.layout_flat
+            _orientation = redblobhex.orientation_flat
         elif self.hex_orientation == "pointy":
-            _orientation = redblobhex.layout_pointy
+            _orientation = redblobhex.orientation_pointy
         else:
             raise ValueError("Only 'flat' and 'pointy' orientation is supported.")
 
@@ -80,7 +80,7 @@ class HexGrid(object):
             x, y, direction=pyproj.enums.TransformDirection.INVERSE
         )
 
-    def lon_lat_to_hex(self, lon: float = None, lat: float = None) -> redblobhex._Hex:
+    def lon_lat_to_hex(self, lon: float = None, lat: float = None) -> redblobhex.Hex:
         """Point in lon lat to hex tuple.
 
         Parameters
@@ -100,7 +100,7 @@ class HexGrid(object):
         )
         return hex_tuple
 
-    def hex_to_lon_lat(self, hex_tuple: redblobhex._Hex = None):
+    def hex_to_lon_lat(self, hex_tuple: redblobhex.Hex = None):
         """Hex tuple to lon, lat.
 
         Parameters
@@ -118,7 +118,7 @@ class HexGrid(object):
         )
         return self._transform_proj_to_lon_lat(*hex_center_projected)
 
-    def hex_corners_lon_lat(self, hex_tuple: redblobhex._Hex = None):
+    def hex_corners_lon_lat(self, hex_tuple: redblobhex.Hex = None):
         """Hex tuple to corner lon, lat.
 
         Parameters
@@ -162,4 +162,4 @@ class HexGrid(object):
             r1 = max(-map_radius, -q - map_radius)
             r2 = min(map_radius, -q + map_radius)
             for r in range(r1, r2 + 1):
-                yield redblobhex._Hex(q, r, -q - r)
+                yield redblobhex.Hex(q, r, -q - r)

@@ -6,12 +6,15 @@ dependencies:
   - dask
   - git
   - ipython
+  - jupyterlab
+  - matplotlib
   - netcdf4
   - numpy
   - pre-commit
   - pyproj
   - pytest
   - scipy
+  - seaborn
   - xarray
   - pip:
       - codecov

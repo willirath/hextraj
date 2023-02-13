@@ -116,7 +116,9 @@ class HexProj(object):
         hex_center_projected = redblobhex.hex_to_pixel(
             self.hex_layout_projected, hex_tuple
         )
-        return self._transform_proj_to_lon_lat(*hex_center_projected)
+        return self._transform_proj_to_lon_lat(
+            hex_center_projected.x, hex_center_projected.y
+        )
 
     def hex_corners_lon_lat(self, hex_tuple: redblobhex.Hex = None):
         """Hex tuple to corner lon, lat.

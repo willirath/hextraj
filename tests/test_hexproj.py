@@ -12,10 +12,10 @@ def test_origin_projected_to_zero(orientation, point_dtype):
         lon_origin=0, lat_origin=0, hex_size_meters=100, hex_orientation=orientation
     )
     if point_dtype == "scalar":
-        hex = hex_proj.lon_lat_to_hex(lon=0.0, lat=0.0)
+        hex = hex_proj.lon_lat_to_hex_SoA(lon=0.0, lat=0.0)
         assert hex == Hex(0, 0, 0)
     if point_dtype == "array":
-        hex = hex_proj.lon_lat_to_hex(lon=np.zeros((2, 3)), lat=np.zeros((2, 3)))
+        hex = hex_proj.lon_lat_to_hex_SoA(lon=np.zeros((2, 3)), lat=np.zeros((2, 3)))
         assert hex == Hex(np.zeros((2, 3)), np.zeros((2, 3)), np.zeros((2, 3)))
 
 

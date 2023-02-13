@@ -2,6 +2,9 @@ import pyproj
 
 from . import redblobhex_array as redblobhex
 
+from numpy.typing import NDArray
+import xarray as xr
+
 
 class HexProj(object):
     def __init__(
@@ -80,8 +83,11 @@ class HexProj(object):
             x, y, direction=pyproj.enums.TransformDirection.INVERSE
         )
 
-    def lon_lat_to_hex(self, lon: float = None, lat: float = None) -> redblobhex.Hex:
-        """Point in lon lat to hex tuple.
+    def lon_lat_to_hex_SoA(self, lon: float = None, lat: float = None) -> redblobhex.Hex:
+        """Point in lon lat to hex label (tuple of arrays).
+
+        This is the internal representation which makes best use of the 
+        array capabilities of pyproj.
 
         Parameters
         ----------
@@ -92,7 +98,9 @@ class HexProj(object):
 
         Returns
         -------
-        Hex tuple.
+        tuple
+            Tuple of arrays.
+
         """
         xy_projected = self._transform_lon_lat_to_proj(lon=lon, lat=lat)
         hex_tuple = redblobhex.hex_round(
@@ -100,8 +108,38 @@ class HexProj(object):
         )
         return hex_tuple
 
-    def hex_to_lon_lat(self, hex_tuple: redblobhex.Hex = None):
-        """Hex tuple to lon, lat.
+    def lon_lat_to_hex_AoS(self, lon: float = None, lat: float = None) -> NDArray:
+        """Point in lon lat to hex label (array of tuples).
+
+        This is a representation which allows for handling hex labels as
+        categoricals.
+
+        Parameters
+        ----------
+        lon: float
+           Longitude.
+        lat: float
+           Latitude.
+
+        Returns
+        -------
+        array
+            Array of tuples.
+
+        """
+        hex_tuple_SoA = self.lon_lat_to_hex_SoA(lon=lon, lat=lat)
+        hex_tuple_AoS = (
+            hex_tuple_SoA.q.astype([("q", int)]).astype(tuple)
+            + hex_tuple_SoA.r.astype([("r", int)]).astype(tuple)
+            + hex_tuple_SoA.s.astype([("s", int)]).astype(tuple)
+        )
+        return hex_tuple_AoS
+
+    def hex_to_lon_lat_SoA(self, hex_tuple: redblobhex.Hex = None):
+        """Hex tuple to lon, lat (from hex tuple of arrays).
+
+        This is the internal representation which makes best use of the 
+        array capabilities of pyproj.
 
         Parameters
         ----------

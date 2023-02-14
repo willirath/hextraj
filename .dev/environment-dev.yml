@@ -7,6 +7,7 @@ dependencies:
   - distributed
   - git
   - htop
+  #  - jupyterlab  # already included in the base image
   - matplotlib
   - netcdf4
   - numpy

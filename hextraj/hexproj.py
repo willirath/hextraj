@@ -1,9 +1,10 @@
 import pyproj
-
-from . import redblobhex_array as redblobhex
+import xarray as xr
 
 from numpy.typing import NDArray
-import xarray as xr
+
+from . import redblobhex_array as redblobhex
+from .aux import hex_AoS_to_SoA, hex_SoA_to_AoS
 
 
 class HexProj(object):
@@ -83,10 +84,12 @@ class HexProj(object):
             x, y, direction=pyproj.enums.TransformDirection.INVERSE
         )
 
-    def lon_lat_to_hex_SoA(self, lon: float = None, lat: float = None) -> redblobhex.Hex:
+    def lon_lat_to_hex_SoA(
+        self, lon: float = None, lat: float = None
+    ) -> redblobhex.Hex:
         """Point in lon lat to hex label (tuple of arrays).
 
-        This is the internal representation which makes best use of the 
+        This is the internal representation which makes best use of the
         array capabilities of pyproj.
 
         Parameters
@@ -128,17 +131,14 @@ class HexProj(object):
 
         """
         hex_tuple_SoA = self.lon_lat_to_hex_SoA(lon=lon, lat=lat)
-        hex_tuple_AoS = (
-            hex_tuple_SoA.q.astype([("q", int)]).astype(tuple)
-            + hex_tuple_SoA.r.astype([("r", int)]).astype(tuple)
-            + hex_tuple_SoA.s.astype([("s", int)]).astype(tuple)
-        )
+        hex_tuple_AoS = hex_SoA_to_AoS(hex_tuple_SoA=hex_tuple_SoA)
+
         return hex_tuple_AoS
 
     def hex_to_lon_lat_SoA(self, hex_tuple: redblobhex.Hex = None):
         """Hex tuple to lon, lat (from hex tuple of arrays).
 
-        This is the internal representation which makes best use of the 
+        This is the internal representation which makes best use of the
         array capabilities of pyproj.
 
         Parameters
@@ -152,7 +152,7 @@ class HexProj(object):
             lon, lat
         """
         hex_center_projected = redblobhex.hex_to_pixel(
-            self.hex_layout_projected, hex_tuple
+            self.hex_layout_projected, redblobhex.Hex(*hex_tuple)
         )
         return self._transform_proj_to_lon_lat(
             hex_center_projected.x, hex_center_projected.y

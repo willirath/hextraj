@@ -27,3 +27,10 @@ def test_hex_of_hexes(orientation):
     assert 1 == len(list(hex_proj.hex_of_hexes(map_radius=0)))
     assert 7 == len(list(hex_proj.hex_of_hexes(map_radius=1)))
     assert 19 == len(list(hex_proj.hex_of_hexes(map_radius=2)))
+
+
+def test_check_orientations_available():
+    hp_flat = HexProj(hex_orientation="flat")
+    hp_pointy = HexProj(hex_orientation="pointy")
+    with pytest.raises(ValueError, match="Only 'flat' and 'pointy'"):
+        hp_nonexistent = HexProj(hex_orientation="nonexistent")

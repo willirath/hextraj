@@ -1,11 +1,11 @@
-from .redblobhex_array import Hex
-
 import numpy as np
+
+from .redblobhex_array import Hex
 
 
 def hex_SoA_to_AoS(hex_tuple_SoA):
     """Transform a hex tuple of arrays to an array of tuples.
-    
+
     Parameters
     ----------
     hex_tuple_SoA: Hex
@@ -40,7 +40,7 @@ def hex_AoS_to_SoA(hex_tuple_AoS):
     """
     _shape = hex_tuple_AoS.shape
 
-    _q, _r, _s = zip(*hex_tuple_AoS.reshape((-1, )))
+    _q, _r, _s = zip(*hex_tuple_AoS.reshape((-1,)))
 
     hex_tuple_SoA = Hex(
         q=np.array(_q).reshape(_shape),
@@ -52,5 +52,16 @@ def hex_AoS_to_SoA(hex_tuple_AoS):
 
 
 def hex_AoS_to_string(hex_AoS):
-    hex_AoS_string = np.array(list(map(str, list(hex_AoS.reshape(-1, ))))).reshape(hex_AoS.shape)
+    hex_AoS_string = np.array(
+        list(
+            map(
+                str,
+                list(
+                    hex_AoS.reshape(
+                        -1,
+                    )
+                ),
+            )
+        )
+    ).reshape(hex_AoS.shape)
     return hex_AoS_string

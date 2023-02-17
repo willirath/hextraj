@@ -2,11 +2,12 @@ name: test_env_hextraj
 channels:
   - conda-forge
 dependencies:
-  - python=3.11
+  - python=3
   - dask
+  - distributed
   - git
-  - ipython
-  - jupyterlab
+  - htop
+  #  - jupyterlab  # already included in the base image
   - matplotlib
   - netcdf4
   - numpy

@@ -1,5 +1,5 @@
-FROM mambaorg/micromamba:1.3.0
+FROM pangeo/pangeo-notebook:2022.12.18
 
-COPY --chown=$MAMBA_USER:$MAMBA_USER environment-dev.yml /tmp/env.yaml
-RUN micromamba install -y -n base -f /tmp/env.yaml && \
-    micromamba clean --all --yes
+COPY environment-dev.yml /tmp/env.yaml
+RUN mamba update -y -n notebook -f /tmp/env.yaml && \
+    mamba clean --all --yes

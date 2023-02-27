@@ -5,6 +5,38 @@ from hextraj.hexproj import HexProj
 from hextraj.redblobhex_array import Hex
 
 
+def test_hexproj_repr():
+    """Make sure the repr makes sense."""
+    hex_proj = HexProj(
+        projection_name="laea",
+        lon_origin=0,
+        lat_origin=0,
+        hex_size_meters=100,
+        hex_orientation="flat",
+    )
+    hp_repr = repr(hex_proj)
+    assert "laea" in hp_repr
+    assert "lon_origin=0" in hp_repr
+    assert "lat_origin=0" in hp_repr
+    assert "hex_size_meters=100" in hp_repr
+    assert "flat" in hp_repr
+
+
+def test_hexproj_evaluates():
+    """Make sure the repr is evaluable."""
+    hex_proj = HexProj(
+        projection_name="laea",
+        lon_origin=0,
+        lat_origin=0,
+        hex_size_meters=100,
+        hex_orientation="flat",
+    )
+    hp_repr = repr(hex_proj)
+    hp2 = eval(hp_repr)
+
+    assert hp_repr == repr(hp2)
+
+
 @pytest.mark.parametrize("orientation", ["flat", "pointy"])
 @pytest.mark.parametrize("point_dtype", ["scalar", "array"])
 def test_origin_projected_to_zero(orientation, point_dtype):

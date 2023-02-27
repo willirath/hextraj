@@ -203,3 +203,15 @@ class HexProj(object):
             r2 = min(map_radius, -q + map_radius)
             for r in range(r1, r2 + 1):
                 yield redblobhex.Hex(q, r, -q - r)
+
+    def __repr__(self):
+        """Repr."""
+        return (
+            "HexProj("
+            f"projection_name={repr(self.projection_name)}, "
+            f"lon_origin={repr(self.lon_origin)}, "
+            f"lat_origin={repr(self.lat_origin)}, "
+            f"hex_size_meters={repr(self.hex_size_meters)}, "
+            f"hex_orientation={repr(self.hex_orientation)}, "
+            ")"
+        )

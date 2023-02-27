@@ -5,6 +5,9 @@ import numpy as np
 from numpy.typing import NDArray
 
 
+INTNaN = np.array(np.nan).astype(int)[()]
+
+
 class Hex(NamedTuple):
     q: NDArray  # all of the same shape
     r: NDArray  # all of the same shape
@@ -125,7 +128,8 @@ def hex_to_pixel(layout, h):
     origin = layout.origin
     x = (M.f0 * h.q + M.f1 * h.r) * size.x
     y = (M.f2 * h.q + M.f3 * h.r) * size.y
-    return Point(x + origin.x, y + origin.y)
+    _nans = np.where((h.q == INTNaN) | (h.r == INTNaN) | (h.s == INTNaN), np.nan, 0.0)
+    return Point(x + origin.x + _nans, y + origin.y + _nans)
 
 
 def pixel_to_hex(layout, p):

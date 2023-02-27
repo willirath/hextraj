@@ -9,7 +9,9 @@ from hextraj.redblobhex_array import (
     Layout,
     Point,
     hex_corner_offset,
+    hex_to_pixel,
     orientation_flat,
+    pixel_to_hex,
 )
 
 
@@ -167,3 +169,19 @@ def test_hex_corner_offset_flat():
             0,
         ],
     )
+
+
+def test_nan_positions_roundtrip():
+    """Make sure invalid positions are correctly re-encoded to NaN."""
+    layout = Layout(
+        orientation=orientation_flat,
+        size=Point(1, 1),
+        origin=Point(0, 0),
+    )
+
+    p0 = Point(np.nan, np.nan)
+    h = pixel_to_hex(p=p0, layout=layout)
+    p1 = hex_to_pixel(layout=layout, h=h)
+
+    np.testing.assert_equal(p1.x, p0.x)
+    np.testing.assert_equal(p1.y, p0.y)

@@ -15,7 +15,7 @@ Please check the tutorial.
 
 ## Installation
 
-ATM, you can install from Github. 
+ATM, you can install from Github.
 
 For the latest release `2023.2.20.1`:
 ```shell

@@ -1,3 +1,5 @@
+import dask.array
+import numpy as np
 import pyproj
 import xarray as xr
 
@@ -158,7 +160,35 @@ class HexProj(object):
             hex_center_projected.x, hex_center_projected.y
         )
 
-    def hex_corners_lon_lat(self, hex_tuple: redblobhex.Hex = None):
+    def hex_corners_lon_lat_AoS(self, hex_tuple: redblobhex.Hex = None):
+        """Hex tuple to corner lon, lat.
+
+        Parameters
+        ----------
+        hex_tuple: tuple
+            Hex tuple.
+
+        Returns
+        -------
+        array
+            Lon values of the corners. Shape: (7, ) + hex_tuple.q.shape.
+        array
+            Lat values of the corners. Shape: (7, ) + hex_tuple.q.shape.
+
+        The returned array should be directly usable in Matplotlib:
+        `matplotlib.pyplot.plot(corn_lon.reshape(7, -1), corn_lat.reshape(7, -1))`
+        """
+        hex_tuple_SoA = hex_AoS_to_SoA(hex_tuple)
+        corners_SoA = self.hex_corners_lon_lat_SoA(hex_tuple_SoA)
+
+        corners_lon, corners_lat = zip(*corners_SoA)
+
+        corners_lon = np.stack(corners_lon, axis=0)
+        corners_lat = np.stack(corners_lat, axis=0)
+
+        return corners_lon, corners_lat
+
+    def hex_corners_lon_lat_SoA(self, hex_tuple: redblobhex.Hex = None):
         """Hex tuple to corner lon, lat.
 
         Parameters
@@ -184,6 +214,26 @@ class HexProj(object):
             self._transform_proj_to_lon_lat(c.x, c.y) for c in corners_projected
         ]
         return corners_lon_lat
+
+    def hex_corners_lon_lat_xarray(self, hex_labels: xr.DataArray = None):
+        """ASDF."""
+
+        if isinstance(hex_labels.data, dask.array.core.Array):
+            raise NotImplementedError("Corners for Dask arrays are not implemented.")
+
+        corners_lon, corners_lat = self.hex_corners_lon_lat_AoS(hex_labels.data)
+
+        corners = xr.Dataset(
+            {
+                "lon": xr.DataArray(corners_lon, dims=("corner",) + hex_labels.dims),
+                "lat": xr.DataArray(corners_lat, dims=("corner",) + hex_labels.dims),
+            },
+            coords={
+                "hex_labels": hex_labels,
+            },
+        )
+
+        return corners
 
     def hex_of_hexes(self, map_radius: int = 2):
         """Generate collection of hexes which fill a hex centered about (0, 0, 0).

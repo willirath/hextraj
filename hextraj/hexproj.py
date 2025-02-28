@@ -1,5 +1,6 @@
 import pyproj
 import xarray as xr
+import numpy as np
 
 from numpy.typing import NDArray
 
@@ -202,6 +203,41 @@ class HexProj(object):
             r1 = max(-map_radius, -q - map_radius)
             r2 = min(map_radius, -q + map_radius)
             for r in range(r1, r2 + 1):
+                yield redblobhex.Hex(q, r, -q - r)
+
+    def rectangle_of_hexes(self, lon1, lon2, lat1, lat2):
+        """Fill a rectangle with hexagons."""
+
+        def central_longitude(lon1, lon2):
+
+            def _normalize(lon):
+                return (lon + 180) % 360 - 180
+
+            lon1 = _normalize(lon1)
+            lon2 = _normalize(lon2)
+
+            if lon2 == -180:
+                lon2 = 180
+
+            central_lon = (lon2 + lon1) / 2
+            central_lon = _normalize(central_lon)
+            diff_lon = abs(lon2 - lon1)
+            
+            return central_lon, diff_lon
+
+        central_lon, diff_lon = central_longitude(lon1, lon2)
+        diff_lat = (lat2 - lat1)
+        central_lat = diff_lat / 2
+
+        self.lon_origin = central_lon
+        self.lat_origin = central_lat
+
+        n_vertical = int(diff_lat / 2 * 111 * 1e3 / self.hex_size_meters)
+        n_horizontal = int(diff_lon / 2 * np.cos(np.deg2rad(central_lat)) * 111 * 1e3 / self.hex_size_meters)
+
+        for r in range(-n_vertical, n_vertical):
+            r_offset = r % 2
+            for q in range(-n_horizontal + r_offset, n_horizontal + r_offset):
                 yield redblobhex.Hex(q, r, -q - r)
 
     def __repr__(self):

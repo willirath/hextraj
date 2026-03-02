@@ -144,13 +144,17 @@ class HexProj:
         Parameters
         ----------
         hex_tuple: tuple
-            Hex tuple.
+            Hex tuple (q, r) or (q, r, s). If only (q, r) provided, s is computed.
 
         Returns
         -------
         tuple
             lon, lat
         """
+        if len(hex_tuple) == 2:
+            q, r = hex_tuple
+            s = -q - r
+            hex_tuple = (q, r, s)
         hex_center_projected = redblobhex.hex_to_pixel(
             self.hex_layout_projected, redblobhex.Hex(*hex_tuple)
         )
@@ -346,6 +350,78 @@ class HexProj:
         mask = gdf.geometry.intersects(region_polygon)
 
         return candidate_hex_ids[mask.values]
+
+    def edges_geodataframe(self, from_ids, to_ids, **value_cols):
+        """Build a GeoDataFrame of LineString edges between hex centers.
+
+        Parameters
+        ----------
+        from_ids : array-like
+            1D int64 hex IDs for the origin end of each edge.
+        to_ids : array-like
+            1D int64 hex IDs for the destination end of each edge.
+        **value_cols :
+            Additional columns aligned with from_ids / to_ids (e.g. weight=...).
+
+        Returns
+        -------
+        geopandas.GeoDataFrame
+            MultiIndex (from_id, to_id), LineString geometry column, value_cols,
+            CRS=EPSG:4326. Edges with an INVALID_HEX_ID endpoint have None geometry.
+        """
+        import pandas as pd
+        import geopandas
+        import shapely
+
+        from_ids = np.asarray(from_ids, dtype=np.int64)
+        to_ids = np.asarray(to_ids, dtype=np.int64)
+
+        # Decode both endpoints
+        q_from, r_from = decode_hex_id(from_ids)
+        q_to, r_to = decode_hex_id(to_ids)
+
+        # Build invalid mask where either endpoint is INVALID_HEX_ID
+        invalid = (q_from == redblobhex.INTNaN) | (r_from == redblobhex.INTNaN) | \
+                  (q_to == redblobhex.INTNaN) | (r_to == redblobhex.INTNaN)
+        valid = ~invalid
+
+        geometries = [None] * len(from_ids)
+
+        if valid.any():
+            # For valid rows: hex_to_pixel on both ends
+            q_from_valid = q_from[valid]
+            r_from_valid = r_from[valid]
+            q_to_valid = q_to[valid]
+            r_to_valid = r_to[valid]
+
+            hex_from = redblobhex.Hex(q_from_valid, r_from_valid, -q_from_valid - r_from_valid)
+            hex_to = redblobhex.Hex(q_to_valid, r_to_valid, -q_to_valid - r_to_valid)
+
+            center_from = redblobhex.hex_to_pixel(self.hex_layout_projected, hex_from)
+            center_to = redblobhex.hex_to_pixel(self.hex_layout_projected, hex_to)
+
+            # Transform from projected space to lon/lat
+            lon_from, lat_from = self._transform_proj_to_lon_lat(center_from.x, center_from.y)
+            lon_to, lat_to = self._transform_proj_to_lon_lat(center_to.x, center_to.y)
+
+            # Build coordinate arrays for LineStrings: shape (N_valid, 2, 2)
+            n_valid = valid.sum()
+            coords = np.stack([
+                np.stack([lon_from, lat_from], axis=-1),  # (N_valid, 2) - first endpoint
+                np.stack([lon_to, lat_to], axis=-1)       # (N_valid, 2) - second endpoint
+            ], axis=1)  # (N_valid, 2, 2)
+
+            linestrings = shapely.linestrings(coords)
+
+            valid_indices = np.where(valid)[0]
+            for i, linestring in zip(valid_indices, linestrings):
+                geometries[i] = linestring
+
+        return geopandas.GeoDataFrame(
+            {**value_cols, "geometry": geometries},
+            index=pd.MultiIndex.from_arrays([from_ids, to_ids], names=["from_id", "to_id"]),
+            crs="EPSG:4326"
+        )
 
     def __repr__(self):
         """Repr."""

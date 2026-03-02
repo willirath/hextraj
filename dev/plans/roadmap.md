@@ -42,11 +42,11 @@ Depends on: M2
 ## M4 — Visualization
 _With geopandas as the output format, most of this is thin convenience._
 
-- [ ] Hex centers: `GeoDataFrame` of `Point` geometries (falls out of M3)
-- [ ] Hex outlines: `GeoDataFrame.boundary.plot()`
-- [ ] Filled patches: `GeoDataFrame.plot(column=...)` choropleth
-- [ ] Weighted edges between centers: `GeoDataFrame` of `LineString` geometries
-- [ ] Notebook section demonstrating all four
+- [x] Hex centers: `GeoDataFrame` of `Point` geometries (falls out of M3)
+- [x] Hex outlines: `GeoDataFrame.boundary.plot()`
+- [x] Filled patches: `GeoDataFrame.plot(column=...)` choropleth
+- [x] Weighted edges between centers: `HexProj.edges_geodataframe(from_ids, to_ids, **value_cols)` → `GeoDataFrame` of `LineString` geometries
+- [x] Notebook section demonstrating all four
 
 Depends on: M3
 
@@ -66,6 +66,8 @@ Depends on: M2, M3
 ---
 
 ## Backlog
+
+- Documentation revisit.
 
 - check test coverage
 - M2 leftover: Remove or fold `hex_AoS_to_string` into the new ID scheme.

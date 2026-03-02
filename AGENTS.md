@@ -45,3 +45,5 @@ Notebooks follow a **human-facing literate programming** style:
 - Use Markdown cells for narrative text, equations (LaTeX), and explanations — not inline comments inside code cells.
 - Keep code cells well-scoped and short: one logical step per cell.
 - Avoid long monolithic code blocks; split them into meaningful, readable units.
+
+**Editing notebooks:** Use the `NotebookEdit` tool to add, modify, or delete cells — never manipulate `.ipynb` JSON directly with Python scripts.

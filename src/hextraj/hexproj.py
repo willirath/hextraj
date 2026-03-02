@@ -1,8 +1,13 @@
+from __future__ import annotations
+
+from collections.abc import Iterator
+from typing import cast
+
 import numpy as np
 import pyproj
 import xarray as xr
 
-from numpy.typing import NDArray
+from numpy.typing import ArrayLike, NDArray
 
 from . import redblobhex_array as redblobhex
 from ._proj import make_transformer
@@ -17,7 +22,7 @@ class HexProj:
         lat_origin: float = 0.0,
         hex_size_meters: float = 100_000,
         hex_orientation: str = "flat",
-    ):
+    ) -> None:
         """HexProj Labeller.
 
         Args:
@@ -93,7 +98,7 @@ class HexProj:
         )
         return hex_tuple
 
-    def label(self, lon, lat):
+    def label(self, lon: ArrayLike, lat: ArrayLike) -> np.int64 | NDArray[np.int64]:
         """Map lon/lat coordinates to int64 hex IDs.
 
         NaN positions are assigned INVALID_HEX_ID.
@@ -160,7 +165,7 @@ class HexProj:
         ]
         return corners_lon_lat
 
-    def hex_of_hexes(self, map_radius: int = 2):
+    def hex_of_hexes(self, map_radius: int = 2) -> Iterator:
         """Generate all hexes within map_radius steps of the origin.
 
         Args:
@@ -173,9 +178,9 @@ class HexProj:
             r1 = max(-map_radius, -q - map_radius)
             r2 = min(map_radius, -q + map_radius)
             for r in range(r1, r2 + 1):
-                yield redblobhex.Hex(q, r, -q - r)
+                yield redblobhex.Hex(q, r, -q - r)  # type: ignore[arg-type]
 
-    def to_geodataframe(self, hex_ids, **value_cols):
+    def to_geodataframe(self, hex_ids: ArrayLike, **value_cols):
         """Convert hex IDs to a GeoDataFrame with Polygon geometries.
 
         Args:
@@ -190,7 +195,7 @@ class HexProj:
         import shapely
 
         hex_ids = np.asarray(hex_ids, dtype=np.int64)
-        q_coords, r_coords = decode_hex_id(hex_ids)
+        q_coords, r_coords = cast(tuple[NDArray[np.int64], NDArray[np.int64]], decode_hex_id(hex_ids))
 
         invalid = (q_coords == redblobhex.INTNaN) | (r_coords == redblobhex.INTNaN)
         valid = ~invalid
@@ -231,7 +236,9 @@ class HexProj:
             crs="EPSG:4326"
         )
 
-    def rectangle_of_hexes(self, lon_min, lon_max, lat_min, lat_max):
+    def rectangle_of_hexes(
+        self, lon_min: float, lon_max: float, lat_min: float, lat_max: float
+    ) -> NDArray[np.int64]:
         """Return all hex IDs whose polygons intersect a bounding box.
 
         Args:
@@ -270,7 +277,7 @@ class HexProj:
         r_flat = r_mesh.ravel()
         s_flat = -q_flat - r_flat
 
-        hex_ids = encode_hex_id(q_flat, r_flat)
+        hex_ids = cast(NDArray[np.int64], encode_hex_id(q_flat, r_flat))
 
         # Build bbox as shapely Polygon and filter by intersects
         bbox_polygon = shapely_box(lon_min, lat_min, lon_max, lat_max)
@@ -279,7 +286,7 @@ class HexProj:
 
         return hex_ids[mask.values]
 
-    def region_of_hexes(self, region_polygon):
+    def region_of_hexes(self, region_polygon) -> NDArray[np.int64]:
         """Return all hex IDs whose polygons intersect a region polygon.
 
         Args:
@@ -303,7 +310,7 @@ class HexProj:
 
         return candidate_hex_ids[mask.values]
 
-    def edges_geodataframe(self, from_ids, to_ids, **value_cols):
+    def edges_geodataframe(self, from_ids: ArrayLike, to_ids: ArrayLike, **value_cols):
         """Build a GeoDataFrame of LineString edges between hex centres.
 
         Args:
@@ -324,8 +331,8 @@ class HexProj:
         to_ids = np.asarray(to_ids, dtype=np.int64)
 
         # Decode both endpoints
-        q_from, r_from = decode_hex_id(from_ids)
-        q_to, r_to = decode_hex_id(to_ids)
+        q_from, r_from = cast(tuple[NDArray[np.int64], NDArray[np.int64]], decode_hex_id(from_ids))
+        q_to, r_to = cast(tuple[NDArray[np.int64], NDArray[np.int64]], decode_hex_id(to_ids))
 
         # Build invalid mask where either endpoint is INVALID_HEX_ID
         invalid = (q_from == redblobhex.INTNaN) | (r_from == redblobhex.INTNaN) | \
@@ -370,7 +377,7 @@ class HexProj:
             crs="EPSG:4326"
         )
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """Repr."""
         return (
             "HexProj("

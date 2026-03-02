@@ -13,7 +13,7 @@ name = "hextraj"
 version = "2023.2.20.1"
 description = "Hex labelling of trajectory data"
 readme = "README.md"
-license = { file = "LICENSE.txt" }
+license = { file = "LICENSE" }
 authors = [{ name = "Willi Rath", email = "wrath@geomar.de" }]
 requires-python = ">=3.10"
 dependencies = [
@@ -35,6 +35,10 @@ Homepage = "https://github.com/willirath/hextraj"
 minversion = "6.0"
 addopts = "-v"
 testpaths = ["tests"]
+
+[tool.mypy]
+ignore_missing_imports = true
+exclude = ["src/hextraj/redblobhex\\.py", "src/hextraj/redblobhex_array\\.py"]
 
 [tool.isort]
 known_third_party = ["dask", "geopandas", "numpy", "pandas", "pyproj", "pytest", "setuptools", "shapely", "xarray"]

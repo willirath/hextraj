@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import numpy as np
+from numpy.typing import ArrayLike, NDArray
 
 from .redblobhex_array import INTNaN
 
@@ -6,7 +9,7 @@ from .redblobhex_array import INTNaN
 INVALID_HEX_ID = np.int64(-1)
 
 
-def _to_int64(x):
+def _to_int64(x) -> np.ndarray:
     """Cast x to int64, staying lazy if x is a dask array."""
     if hasattr(x, "astype"):
         return x.astype(np.int64)
@@ -21,7 +24,7 @@ def _z_inv(n):
     return np.where(n % 2 == 0, n // 2, -(n + 1) // 2)
 
 
-def encode_hex_id(q, r):
+def encode_hex_id(q: ArrayLike, r: ArrayLike) -> np.int64 | NDArray[np.int64]:
     """Encode (q, r) hex coordinates to a single int64 via Cantor pairing.
 
     Args:
@@ -44,7 +47,9 @@ def encode_hex_id(q, r):
     return result.astype(np.int64)
 
 
-def decode_hex_id(hex_id):
+def decode_hex_id(
+    hex_id: ArrayLike,
+) -> tuple[np.int64, np.int64] | tuple[NDArray[np.int64], NDArray[np.int64]]:
     """Decode a Cantor int64 hex ID back to (q, r) axial coordinates.
 
     Args:
@@ -69,7 +74,7 @@ def decode_hex_id(hex_id):
     r = _z_inv(b).astype(np.int64)
 
     if scalar:
-        return (INTNaN, INTNaN) if invalid else (np.int64(q), np.int64(r))
+        return (np.int64(INTNaN), np.int64(INTNaN)) if invalid else (np.int64(q), np.int64(r))
 
     # Use np.where instead of item assignment so dask arrays stay lazy
     q = np.where(invalid, INTNaN, q)

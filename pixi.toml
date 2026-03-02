@@ -25,9 +25,11 @@ pytest = "*"
 pytest-cov = "*"
 jupyter = "*"
 nbconvert = "*"
+mypy = "*"
 
 [feature.dev.tasks]
 test = "pytest --cov --cov-report=term-missing"
+mypy = "mypy src/hextraj/"
 
 [environments]
 default = { features = ["full", "dev"], solve-group = "default" }

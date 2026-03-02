@@ -1,5 +1,0 @@
-[run]
-omit = hextraj/redblobhex.py
-
-[report]
-omit = hextraj/redblobhex.py

@@ -10,6 +10,7 @@ pyproj = "*"
 xarray = "*"
 geopandas = "*"
 shapely = "*"
+netcdf4 = ">=1.7.4,<2"
 
 [pypi-dependencies]
 hextraj = { path = ".", editable = true }

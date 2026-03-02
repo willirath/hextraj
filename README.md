@@ -4,6 +4,7 @@ hextraj
 [![codecov](https://codecov.io/gh/willirath/hextraj/branch/main/graph/badge.svg)](https://codecov.io/gh/willirath/hextraj)
 [![License:MIT](https://img.shields.io/badge/License-MIT-lightgray.svg?style=flt-square)](https://opensource.org/licenses/MIT)
 
+![Hex region example](docs/hex_region_example.png)
 
 Hex labelling of trajectory data.
 

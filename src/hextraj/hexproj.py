@@ -20,19 +20,13 @@ class HexProj:
     ):
         """HexProj Labeller.
 
-        Parameters
-        ----------
-        projection_name: str
-            Defaults to: "laea"
-        lon_origin: float
-            Defaults to: 0.0
-        lat_origin: float
-            Defaults to: 0.0
-        hex_size_meters: float
-            Defaults to: 100000.0
-        hex_orientation: str
-            Can be "flat" or "pointy". Defaults to: "flat"
-
+        Args:
+            projection_name: Pyproj projection name. Defaults to "laea".
+            lon_origin: Longitude of projection centre. Defaults to 0.0.
+            lat_origin: Latitude of projection centre. Defaults to 0.0.
+            hex_size_meters: Hex size (corner-to-centre distance) in metres.
+                Defaults to 100000.
+            hex_orientation: "flat" or "pointy". Defaults to "flat".
         """
         self.projection_name = projection_name
         self.lat_origin = lat_origin
@@ -84,23 +78,14 @@ class HexProj:
         )
 
     def lon_lat_to_hex_SoA(self, lon=None, lat=None) -> redblobhex.Hex:
-        """Point in lon lat to hex label (tuple of arrays).
+        """Map lon/lat to hex axial coordinates (SoA).
 
-        This is the internal representation which makes best use of the
-        array capabilities of pyproj.
+        Args:
+            lon: Longitude or array of longitudes.
+            lat: Latitude or array of latitudes.
 
-        Parameters
-        ----------
-        lon: float
-           Longitude.
-        lat: float
-           Latitude.
-
-        Returns
-        -------
-        tuple
-            Tuple of arrays.
-
+        Returns:
+            Hex namedtuple with arrays q, r, s.
         """
         xy_projected = self._transform_lon_lat_to_proj(lon=lon, lat=lat)
         hex_tuple = redblobhex.hex_round(
@@ -109,19 +94,16 @@ class HexProj:
         return hex_tuple
 
     def label(self, lon, lat):
-        """Convenience wrapper to get hex IDs from lon/lat coordinates.
+        """Map lon/lat coordinates to int64 hex IDs.
 
-        Parameters
-        ----------
-        lon: float or array-like
-            Longitude(s).
-        lat: float or array-like
-            Latitude(s).
+        NaN positions are assigned INVALID_HEX_ID.
 
-        Returns
-        -------
-        int64 or ndarray
-            Hex ID(s) encoded from q and r coordinates.
+        Args:
+            lon: Longitude(s) as scalar or array-like.
+            lat: Latitude(s) as scalar or array-like.
+
+        Returns:
+            int64 scalar or ndarray of hex IDs.
         """
         lon = np.asarray(lon, dtype=float)
         lat = np.asarray(lat, dtype=float)
@@ -136,20 +118,13 @@ class HexProj:
         return result
 
     def hex_to_lon_lat_SoA(self, hex_tuple=None):
-        """Hex tuple to lon, lat (from hex tuple of arrays).
+        """Map hex axial coordinates to lon/lat.
 
-        This is the internal representation which makes best use of the
-        array capabilities of pyproj.
+        Args:
+            hex_tuple: (q, r) or (q, r, s). s is computed if omitted.
 
-        Parameters
-        ----------
-        hex_tuple: tuple
-            Hex tuple (q, r) or (q, r, s). If only (q, r) provided, s is computed.
-
-        Returns
-        -------
-        tuple
-            lon, lat
+        Returns:
+            Tuple (lon, lat) of arrays.
         """
         if len(hex_tuple) == 2:
             q, r = hex_tuple
@@ -163,17 +138,13 @@ class HexProj:
         )
 
     def hex_corners_lon_lat(self, hex_tuple=None):
-        """Hex tuple to corner lon, lat.
+        """Return corner lon/lat coordinates for a hex.
 
-        Parameters
-        ----------
-        hex_tuple: tuple
-            Hex tuple.
+        Args:
+            hex_tuple: Hex namedtuple.
 
-        Returns
-        -------
-        list
-            List of (lon, lat) tuples of corners.
+        Returns:
+            List of 7 (lon, lat) tuples (first and last are identical).
         """
         hex_center_projected = redblobhex.hex_to_pixel(
             self.hex_layout_projected, hex_tuple
@@ -190,17 +161,13 @@ class HexProj:
         return corners_lon_lat
 
     def hex_of_hexes(self, map_radius: int = 2):
-        """Generate collection of hexes which fill a hex centered about (0, 0, 0).
+        """Generate all hexes within map_radius steps of the origin.
 
-        Parameters
-        ----------
-        map_radius: int
-           Defaults to: 2
+        Args:
+            map_radius: Number of hex steps from centre. Defaults to 2.
 
-        Returns
-        -------
-        generator
-           List of hex tuples.
+        Yields:
+            Hex namedtuples.
         """
         for q in range(-map_radius, map_radius + 1):
             r1 = max(-map_radius, -q - map_radius)
@@ -211,17 +178,13 @@ class HexProj:
     def to_geodataframe(self, hex_ids, **value_cols):
         """Convert hex IDs to a GeoDataFrame with Polygon geometries.
 
-        Parameters
-        ----------
-        hex_ids: array-like
-            1D array of int64 hex IDs (may include INVALID_HEX_ID)
-        **value_cols: dict
-            Additional columns to include in the GeoDataFrame
+        Args:
+            hex_ids: 1D array of int64 hex IDs (may include INVALID_HEX_ID).
+            **value_cols: Additional columns aligned with hex_ids.
 
-        Returns
-        -------
-        geopandas.GeoDataFrame
-            GeoDataFrame with index=hex_ids, geometry column, and value_cols
+        Returns:
+            GeoDataFrame with index=hex_ids, Polygon geometry column, CRS=EPSG:4326.
+            INVALID_HEX_ID entries have None geometry.
         """
         import geopandas
         import shapely
@@ -269,23 +232,16 @@ class HexProj:
         )
 
     def rectangle_of_hexes(self, lon_min, lon_max, lat_min, lat_max):
-        """Generate all hex IDs covering a bounding box.
+        """Return all hex IDs whose polygons intersect a bounding box.
 
-        Parameters
-        ----------
-        lon_min: float
-            Minimum longitude
-        lon_max: float
-            Maximum longitude
-        lat_min: float
-            Minimum latitude
-        lat_max: float
-            Maximum latitude
+        Args:
+            lon_min: Minimum longitude.
+            lon_max: Maximum longitude.
+            lat_min: Minimum latitude.
+            lat_max: Maximum latitude.
 
-        Returns
-        -------
-        np.ndarray
-            1D array of int64 hex IDs
+        Returns:
+            1D int64 ndarray of hex IDs.
         """
         from shapely.geometry import box as shapely_box
 
@@ -324,17 +280,13 @@ class HexProj:
         return hex_ids[mask.values]
 
     def region_of_hexes(self, region_polygon):
-        """Generate all hex IDs whose polygons intersect a region polygon.
+        """Return all hex IDs whose polygons intersect a region polygon.
 
-        Parameters
-        ----------
-        region_polygon: shapely.geometry.Polygon
-            Polygon in WGS84 lon/lat coordinates
+        Args:
+            region_polygon: Shapely polygon in WGS84 lon/lat coordinates.
 
-        Returns
-        -------
-        np.ndarray
-            1D array of int64 hex IDs
+        Returns:
+            1D int64 ndarray of hex IDs.
         """
         bounds = region_polygon.bounds
         lon_min, lat_min, lon_max, lat_max = bounds
@@ -352,22 +304,17 @@ class HexProj:
         return candidate_hex_ids[mask.values]
 
     def edges_geodataframe(self, from_ids, to_ids, **value_cols):
-        """Build a GeoDataFrame of LineString edges between hex centers.
+        """Build a GeoDataFrame of LineString edges between hex centres.
 
-        Parameters
-        ----------
-        from_ids : array-like
-            1D int64 hex IDs for the origin end of each edge.
-        to_ids : array-like
-            1D int64 hex IDs for the destination end of each edge.
-        **value_cols :
-            Additional columns aligned with from_ids / to_ids (e.g. weight=...).
+        Args:
+            from_ids: 1D array of int64 hex IDs for the origin end of each edge.
+            to_ids: 1D array of int64 hex IDs for the destination end of each edge.
+            **value_cols: Additional columns aligned with from_ids/to_ids (e.g. weight=...).
 
-        Returns
-        -------
-        geopandas.GeoDataFrame
-            MultiIndex (from_id, to_id), LineString geometry column, value_cols,
-            CRS=EPSG:4326. Edges with an INVALID_HEX_ID endpoint have None geometry.
+        Returns:
+            GeoDataFrame with MultiIndex (from_id, to_id), LineString geometry,
+            value_cols, CRS=EPSG:4326. Edges with an INVALID_HEX_ID endpoint
+            have None geometry.
         """
         import pandas as pd
         import geopandas

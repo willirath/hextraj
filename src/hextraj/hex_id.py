@@ -24,7 +24,13 @@ def _z_inv(n):
 def encode_hex_id(q, r):
     """Encode (q, r) hex coordinates to a single int64 via Cantor pairing.
 
-    Invalid inputs (q or r equal to INTNaN) map to INVALID_HEX_ID.
+    Args:
+        q: Axial q coordinate(s). int64 scalar, ndarray, or dask array.
+        r: Axial r coordinate(s). int64 scalar, ndarray, or dask array.
+
+    Returns:
+        int64 scalar or array of hex IDs. Inputs where q or r equal INTNaN
+        map to INVALID_HEX_ID.
     """
     q = _to_int64(q)
     r = _to_int64(r)
@@ -39,9 +45,13 @@ def encode_hex_id(q, r):
 
 
 def decode_hex_id(hex_id):
-    """Decode a Cantor int64 hex ID back to (q, r).
+    """Decode a Cantor int64 hex ID back to (q, r) axial coordinates.
 
-    INVALID_HEX_ID maps to (INTNaN, INTNaN).
+    Args:
+        hex_id: int64 scalar, ndarray, or dask array of hex IDs.
+
+    Returns:
+        Tuple (q, r) of same type as input. INVALID_HEX_ID maps to (INTNaN, INTNaN).
     """
     hex_id = _to_int64(hex_id)
     # scalar path: ndim==0 only occurs for numpy scalars, not dask arrays

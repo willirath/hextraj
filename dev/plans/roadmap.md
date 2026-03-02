@@ -67,5 +67,5 @@ Depends on: M2, M3
 ## Backlog
 
 - [x] Documentation revisit — README rewritten, Sphinx docs removed.
-- [ ] typing
+- [x] typing
 - [x] CI workflows — removed; low development volume, not worth the overhead.

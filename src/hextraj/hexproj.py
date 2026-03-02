@@ -4,6 +4,7 @@ import xarray as xr
 from numpy.typing import NDArray
 
 from . import redblobhex_array as redblobhex
+from ._proj import make_transformer
 from .aux import hex_AoS_to_SoA, hex_SoA_to_AoS
 
 
@@ -43,15 +44,9 @@ class HexProj(object):
 
     def _set_up_projection(self):
         """Initialize projection."""
-        self.proj = pyproj.Proj(
-            "+proj={projection_name} +lat_0={lat_origin} +lon_0={lon_origin} +datum=WGS84 +units=m".format(
-                projection_name=self.projection_name,
-                lat_origin=self.lat_origin,
-                lon_origin=self.lon_origin,
-            )
+        self.proj, self.transformer_relto_wgs = make_transformer(
+            self.projection_name, self.lat_origin, self.lon_origin
         )
-        proj_wgs = pyproj.Proj(init="epsg:4326")
-        self.transformer_relto_wgs = pyproj.Transformer.from_proj(proj_wgs, self.proj)
 
     def _set_up_hex_layout(self):
         """Set up hex layout (in projected space!)."""
@@ -72,21 +67,19 @@ class HexProj(object):
             redblobhex.hex_corner_offset(self.hex_layout_projected, c) for c in range(7)
         )
 
-    def _transform_lon_lat_to_proj(self, lon: float = None, lat: float = None):
+    def _transform_lon_lat_to_proj(self, lon=None, lat=None):
         return redblobhex.Point(
             *self.transformer_relto_wgs.transform(
                 lon, lat, direction=pyproj.enums.TransformDirection.FORWARD
             )
         )
 
-    def _transform_proj_to_lon_lat(self, x: float = None, y: float = None):
+    def _transform_proj_to_lon_lat(self, x=None, y=None):
         return self.transformer_relto_wgs.transform(
             x, y, direction=pyproj.enums.TransformDirection.INVERSE
         )
 
-    def lon_lat_to_hex_SoA(
-        self, lon: float = None, lat: float = None
-    ) -> redblobhex.Hex:
+    def lon_lat_to_hex_SoA(self, lon=None, lat=None) -> redblobhex.Hex:
         """Point in lon lat to hex label (tuple of arrays).
 
         This is the internal representation which makes best use of the
@@ -111,7 +104,7 @@ class HexProj(object):
         )
         return hex_tuple
 
-    def lon_lat_to_hex_AoS(self, lon: float = None, lat: float = None) -> NDArray:
+    def lon_lat_to_hex_AoS(self, lon=None, lat=None) -> NDArray:
         """Point in lon lat to hex label (array of tuples).
 
         This is a representation which allows for handling hex labels as
@@ -135,7 +128,7 @@ class HexProj(object):
 
         return hex_tuple_AoS
 
-    def hex_to_lon_lat_SoA(self, hex_tuple: redblobhex.Hex = None):
+    def hex_to_lon_lat_SoA(self, hex_tuple=None):
         """Hex tuple to lon, lat (from hex tuple of arrays).
 
         This is the internal representation which makes best use of the
@@ -158,7 +151,7 @@ class HexProj(object):
             hex_center_projected.x, hex_center_projected.y
         )
 
-    def hex_corners_lon_lat(self, hex_tuple: redblobhex.Hex = None):
+    def hex_corners_lon_lat(self, hex_tuple=None):
         """Hex tuple to corner lon, lat.
 
         Parameters

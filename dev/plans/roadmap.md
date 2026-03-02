@@ -64,7 +64,8 @@ Depends on: M2, M3
 
 ---
 
-## Deferred / no action
+## Backlog
 
+- Docstrings to tensorflow / google style.
 - CI workflows: low development volume, not worth the overhead for now
 - `xarray.align` docs: document in notebook prose when redoing tutorial

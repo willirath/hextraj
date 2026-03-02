@@ -3,6 +3,7 @@
 ## Repository rules
 
 - **No pushing or committing** unless explicitly asked.
+- **Discuss before committing** — present what you did and any findings, wait for the go-ahead.
 - Plans go in `dev/plans/*.md`.
 - Agent-facing documentation goes in `dev/docs/*.md`.
 

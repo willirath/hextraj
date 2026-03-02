@@ -7,6 +7,11 @@
 - Plans go in `dev/plans/*.md`.
 - Agent-facing documentation goes in `dev/docs/*.md`.
 
+## Environment
+
+- Use `pixi run python` (not bare `python`) to run Python in this project.
+- Use `pixi run pytest` (or `pixi run test`) to run tests.
+
 ## Python style
 
 Be Pythonic. Don't over-engineer:

@@ -79,6 +79,14 @@ encode_hex_id(q, r)   -> np.int64 array   # invalid inputs → INVALID_HEX_ID
 decode_hex_id(hex_id) -> (q, r)           # INVALID_HEX_ID → (NaN, NaN)
 ```
 
+### Laziness requirement
+
+Both functions must stay lazy when given dask arrays as input — no `np.asarray`
+calls that would trigger eager computation. `np.where`, `np.floor`, `np.sqrt`,
+and `.astype()` all dispatch correctly to dask, so the implementation should
+route through those rather than materialising. Item-assignment (`arr[mask] = val`)
+must be avoided in the array path; use `np.where(mask, val, arr)` instead.
+
 `s` is always recoverable as `s = -q - r`. Where the full tuple is needed (e.g.
 neighbor lookup, internal geometry) it is reconstructed on the fly.
 

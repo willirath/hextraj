@@ -3,13 +3,13 @@
 ## M1 — Packaging rewrite
 _Foundation. Everything else builds on this._
 
-- [ ] Adopt `src/hextraj/` layout; move `data/` inside package
-- [ ] Migrate metadata from `setup.cfg` to `pyproject.toml` `[project]` table; delete `setup.py` and `setup.cfg`
-- [ ] Switch env management to pixi (`pixi.toml`, lockfile)
-- [ ] Centralise pyproj handling in `_proj.py`; fix deprecated `pyproj.Proj(init=...)` API
-- [ ] Promote `geopandas` / `shapely` to core dependencies
-- [ ] Pin Python floor at 3.10
-- [ ] Verify tests pass in new layout
+- [x] Adopt `src/hextraj/` layout; move `data/` inside package
+- [x] Migrate metadata from `setup.cfg` to `pyproject.toml` `[project]` table; delete `setup.py` and `setup.cfg`
+- [x] Switch env management to pixi (`pixi.toml`, lockfile)
+- [x] Centralise pyproj handling in `_proj.py`; fix deprecated `pyproj.Proj(init=...)` API
+- [x] Promote `geopandas` / `shapely` to core dependencies
+- [x] Pin Python floor at 3.10
+- [x] Verify tests pass in new layout
 
 Design doc: `dev/docs/packaging.md`
 
@@ -18,11 +18,11 @@ Design doc: `dev/docs/packaging.md`
 ## M2 — Hex ID design
 _Prerequisite for aggregation, visualization, and invalid handling._
 
-- [ ] Implement Cantor pairing of `(q, r)` → int64 as the public hex ID
-- [ ] Add vectorised `encode_hex_id(q, r)` / `decode_hex_id(hex_id)` module-level functions
-- [ ] Replace `INTNaN` sentinel with `INVALID_HEX_ID = np.int64(-1)`
+- [x] Implement Cantor pairing of `(q, r)` → int64 as the public hex ID
+- [x] Add vectorised `encode_hex_id(q, r)` / `decode_hex_id(hex_id)` module-level functions
+- [x] Replace `INTNaN` sentinel with `INVALID_HEX_ID = np.int64(-1)`
 - [ ] Remove or fold `hex_AoS_to_string` into the new ID scheme
-- [ ] Update tests
+- [x] Update tests
 
 Design doc: `dev/docs/hex-id-design.md`
 

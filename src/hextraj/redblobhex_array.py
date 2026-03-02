@@ -5,7 +5,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 
-INTNaN = np.array(np.nan).astype(int)[()]
+INTNaN = np.iinfo(np.int64).min
 
 
 class Hex(NamedTuple):

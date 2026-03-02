@@ -4,7 +4,10 @@
 
 Hex labelling of trajectory data.
 
-![Hex region example](figures/hex_region_example.png)
+| Hex region | OD connectivity |
+|:---:|:---:|
+| ![Hex region example](figures/hex_region_example.png) | ![OD connectivity example](figures/hex_conn_dask_example.png) |
+| [hex_aggregation.ipynb](notebooks/hex_aggregation.ipynb) | [hex_conn_dask.ipynb](notebooks/hex_conn_dask.ipynb) |
 
 Maps lon/lat positions to a projected hexagonal grid and provides tools for aggregation and connectivity analysis.
 

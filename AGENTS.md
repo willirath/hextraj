@@ -9,8 +9,8 @@
 
 ## Environment
 
-- Use `pixi run python` (not bare `python`) to run Python in this project.
-- Use `pixi run pytest` (or `pixi run test`) to run tests.
+- Always use `pixi run <command>` — never bare `python`, `pytest`, `jupyter`, etc.
+- Examples: `pixi run python`, `pixi run pytest`, `pixi run jupyter nbconvert ...`
 
 ## TDD workflow
 
@@ -24,6 +24,7 @@ Rules:
 - Main agent does not write implementation code directly — delegate to subagents.
 - Prefer haiku or other simpler model for both test and implementation agents; escalate to higher model only if the task is complex or simpler agent fails.
 - Test style: plain `pytest` functions with `@pytest.mark.parametrize`; no test classes.
+- **Every agent must read `AGENTS.md` at the start of its task.**
 
 ## Backwards compatibility
 

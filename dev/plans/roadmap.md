@@ -55,6 +55,8 @@ Depends on: M3
 ## M5 — Connectivity and aggregation (deferred)
 _Bring in recipes once ready. Dask array / Dask DataFrame heavy._
 
+- [x] Add `HexProj.label(lon, lat)` → int64 hex ID arrays
+- [x] Basic aggregation notebook (label → groupby → choropleth)
 - [ ] Revisit connectivity computation scaling (O(N_traj × N_hex²))
 - [ ] Update tutorial with improved Dask-native recipes
 - [ ] Scaling benchmarks notebook
@@ -65,6 +67,7 @@ Depends on: M2, M3
 
 ## Backlog
 
+- check test coverage
 - M2 leftover: Remove or fold `hex_AoS_to_string` into the new ID scheme.
 - Docstrings to tensorflow / google style.
 - CI workflows: low development volume, not worth the overhead for now

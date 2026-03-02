@@ -108,6 +108,33 @@ class HexProj:
         )
         return hex_tuple
 
+    def label(self, lon, lat):
+        """Convenience wrapper to get hex IDs from lon/lat coordinates.
+
+        Parameters
+        ----------
+        lon: float or array-like
+            Longitude(s).
+        lat: float or array-like
+            Latitude(s).
+
+        Returns
+        -------
+        int64 or ndarray
+            Hex ID(s) encoded from q and r coordinates.
+        """
+        lon = np.asarray(lon, dtype=float)
+        lat = np.asarray(lat, dtype=float)
+        nan_mask = np.isnan(lon) | np.isnan(lat)
+        hex_soa = self.lon_lat_to_hex_SoA(lon=lon, lat=lat)
+        result = encode_hex_id(hex_soa.q, hex_soa.r)
+        if np.any(nan_mask):
+            result = np.where(nan_mask, INVALID_HEX_ID, result)
+        # Handle scalar case: if input was scalar (0-d), return np.int64
+        if result.ndim == 0:
+            return np.int64(result)
+        return result
+
     def hex_to_lon_lat_SoA(self, hex_tuple=None):
         """Hex tuple to lon, lat (from hex tuple of arrays).
 

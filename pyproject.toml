@@ -10,7 +10,7 @@ hextraj = ["data/**/*"]
 
 [project]
 name = "hextraj"
-version = "2023.2.20.1"
+version = "2026.03.02.1"
 description = "Hex labelling of trajectory data"
 readme = "README.md"
 license = { file = "LICENSE" }

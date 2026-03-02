@@ -1,3 +1,4 @@
+import numpy as np
 import pyproj
 import xarray as xr
 
@@ -5,10 +6,10 @@ from numpy.typing import NDArray
 
 from . import redblobhex_array as redblobhex
 from ._proj import make_transformer
-from .aux import hex_AoS_to_SoA, hex_SoA_to_AoS
+from .hex_id import encode_hex_id, decode_hex_id, INVALID_HEX_ID
 
 
-class HexProj(object):
+class HexProj:
     def __init__(
         self,
         projection_name: str = "laea",
@@ -63,9 +64,12 @@ class HexProj(object):
             origin=redblobhex.Point(0, 0),  # always at center of projected space
         )
 
-        self.corner_offsets_projected = tuple(
+        corner_offsets = tuple(
             redblobhex.hex_corner_offset(self.hex_layout_projected, c) for c in range(7)
         )
+        self.corner_offsets_projected = corner_offsets
+        self.corner_offsets_x = np.array([p.x for p in corner_offsets])
+        self.corner_offsets_y = np.array([p.y for p in corner_offsets])
 
     def _transform_lon_lat_to_proj(self, lon=None, lat=None):
         return redblobhex.Point(
@@ -103,30 +107,6 @@ class HexProj(object):
             redblobhex.pixel_to_hex(self.hex_layout_projected, xy_projected)
         )
         return hex_tuple
-
-    def lon_lat_to_hex_AoS(self, lon=None, lat=None) -> NDArray:
-        """Point in lon lat to hex label (array of tuples).
-
-        This is a representation which allows for handling hex labels as
-        categoricals.
-
-        Parameters
-        ----------
-        lon: float
-           Longitude.
-        lat: float
-           Latitude.
-
-        Returns
-        -------
-        array
-            Array of tuples.
-
-        """
-        hex_tuple_SoA = self.lon_lat_to_hex_SoA(lon=lon, lat=lat)
-        hex_tuple_AoS = hex_SoA_to_AoS(hex_tuple_SoA=hex_tuple_SoA)
-
-        return hex_tuple_AoS
 
     def hex_to_lon_lat_SoA(self, hex_tuple=None):
         """Hex tuple to lon, lat (from hex tuple of arrays).
@@ -196,6 +176,149 @@ class HexProj(object):
             r2 = min(map_radius, -q + map_radius)
             for r in range(r1, r2 + 1):
                 yield redblobhex.Hex(q, r, -q - r)
+
+    def to_geodataframe(self, hex_ids, **value_cols):
+        """Convert hex IDs to a GeoDataFrame with Polygon geometries.
+
+        Parameters
+        ----------
+        hex_ids: array-like
+            1D array of int64 hex IDs (may include INVALID_HEX_ID)
+        **value_cols: dict
+            Additional columns to include in the GeoDataFrame
+
+        Returns
+        -------
+        geopandas.GeoDataFrame
+            GeoDataFrame with index=hex_ids, geometry column, and value_cols
+        """
+        import geopandas
+        import shapely
+
+        hex_ids = np.asarray(hex_ids, dtype=np.int64)
+        q_coords, r_coords = decode_hex_id(hex_ids)
+
+        invalid = (q_coords == redblobhex.INTNaN) | (r_coords == redblobhex.INTNaN)
+        valid = ~invalid
+
+        geometries = [None] * len(hex_ids)
+
+        if valid.any():
+            q_valid = q_coords[valid]
+            r_valid = r_coords[valid]
+            hex_soa = redblobhex.Hex(q_valid, r_valid, -q_valid - r_valid)
+            center = redblobhex.hex_to_pixel(self.hex_layout_projected, hex_soa)
+
+            # shape (7, N_valid)
+            corners_x = center.x[np.newaxis, :] + self.corner_offsets_x[:, np.newaxis]
+            corners_y = center.y[np.newaxis, :] + self.corner_offsets_y[:, np.newaxis]
+
+            # one batched inverse projection call
+            corner_lons, corner_lats = self._transform_proj_to_lon_lat(
+                corners_x.ravel(), corners_y.ravel()
+            )
+
+            n_valid = valid.sum()
+            # reshape to (7, N_valid), transpose to (N_valid, 7)
+            corner_lons = corner_lons.reshape(7, n_valid).T
+            corner_lats = corner_lats.reshape(7, n_valid).T
+
+            # (N_valid, 7, 2) coordinate array for shapely.polygons
+            coords = np.stack([corner_lons, corner_lats], axis=-1)
+            polygons = shapely.polygons(coords)
+
+            valid_indices = np.where(valid)[0]
+            for i, poly in zip(valid_indices, polygons):
+                geometries[i] = poly
+
+        return geopandas.GeoDataFrame(
+            {**value_cols, "geometry": geometries},
+            index=hex_ids,
+            crs="EPSG:4326"
+        )
+
+    def rectangle_of_hexes(self, lon_min, lon_max, lat_min, lat_max):
+        """Generate all hex IDs covering a bounding box.
+
+        Parameters
+        ----------
+        lon_min: float
+            Minimum longitude
+        lon_max: float
+            Maximum longitude
+        lat_min: float
+            Minimum latitude
+        lat_max: float
+            Maximum latitude
+
+        Returns
+        -------
+        np.ndarray
+            1D array of int64 hex IDs
+        """
+        from shapely.geometry import box as shapely_box
+
+        hex_corners = []
+        for lon, lat in [
+            (lon_min, lat_min),
+            (lon_max, lat_min),
+            (lon_max, lat_max),
+            (lon_min, lat_max),
+        ]:
+            hex_SoA = self.lon_lat_to_hex_SoA(lon=lon, lat=lat)
+            hex_corners.append((hex_SoA.q, hex_SoA.r))
+
+        q_coords = np.array([h[0] for h in hex_corners], dtype=np.int64)
+        r_coords = np.array([h[1] for h in hex_corners], dtype=np.int64)
+
+        q_min = q_coords.min() - 1
+        q_max = q_coords.max() + 1
+        r_min = r_coords.min() - 1
+        r_max = r_coords.max() + 1
+
+        q_range = np.arange(q_min, q_max + 1, dtype=np.int64)
+        r_range = np.arange(r_min, r_max + 1, dtype=np.int64)
+        q_mesh, r_mesh = np.meshgrid(q_range, r_range, indexing='ij')
+        q_flat = q_mesh.ravel()
+        r_flat = r_mesh.ravel()
+        s_flat = -q_flat - r_flat
+
+        hex_ids = encode_hex_id(q_flat, r_flat)
+
+        # Build bbox as shapely Polygon and filter by intersects
+        bbox_polygon = shapely_box(lon_min, lat_min, lon_max, lat_max)
+        gdf = self.to_geodataframe(hex_ids)
+        mask = gdf.geometry.intersects(bbox_polygon)
+
+        return hex_ids[mask.values]
+
+    def region_of_hexes(self, region_polygon):
+        """Generate all hex IDs whose polygons intersect a region polygon.
+
+        Parameters
+        ----------
+        region_polygon: shapely.geometry.Polygon
+            Polygon in WGS84 lon/lat coordinates
+
+        Returns
+        -------
+        np.ndarray
+            1D array of int64 hex IDs
+        """
+        bounds = region_polygon.bounds
+        lon_min, lat_min, lon_max, lat_max = bounds
+
+        candidate_hex_ids = self.rectangle_of_hexes(
+            lon_min=lon_min,
+            lon_max=lon_max,
+            lat_min=lat_min,
+            lat_max=lat_max
+        )
+
+        gdf = self.to_geodataframe(candidate_hex_ids)
+        mask = gdf.geometry.intersects(region_polygon)
+
+        return candidate_hex_ids[mask.values]
 
     def __repr__(self):
         """Repr."""

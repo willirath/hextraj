@@ -22,6 +22,8 @@ cartopy = "*"
 [feature.dev.dependencies]
 pytest = "*"
 pytest-cov = "*"
+jupyter = "*"
+nbconvert = "*"
 
 [feature.dev.tasks]
 test = "pytest"

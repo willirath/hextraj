@@ -21,7 +21,6 @@ _Prerequisite for aggregation, visualization, and invalid handling._
 - [x] Implement Cantor pairing of `(q, r)` → int64 as the public hex ID
 - [x] Add vectorised `encode_hex_id(q, r)` / `decode_hex_id(hex_id)` module-level functions
 - [x] Replace `INTNaN` sentinel with `INVALID_HEX_ID = np.int64(-1)`
-- [ ] Remove or fold `hex_AoS_to_string` into the new ID scheme
 - [x] Update tests
 
 Design doc: `dev/docs/hex-id-design.md`
@@ -31,10 +30,10 @@ Design doc: `dev/docs/hex-id-design.md`
 ## M3 — GeoDataFrame output and grid construction
 _Unlocks visualization and region-aware grid construction._
 
-- [ ] Add `HexProj.to_geodataframe(hex_ids, **value_cols)` → `GeoDataFrame` with hex `Polygon` geometries and int64 ID index
-- [ ] Fix and clean up `rectangle_of_hexes` (no mutation of `self`, correct `central_lat`)
-- [ ] Add `region_of_hexes(region_polygon)` using dense grid + `.intersects()`
-- [ ] Tests for all three
+- [x] Add `HexProj.to_geodataframe(hex_ids, **value_cols)` → `GeoDataFrame` with hex `Polygon` geometries and int64 ID index
+- [x] Fix and clean up `rectangle_of_hexes` (no mutation of `self`, correct `central_lat`)
+- [x] Add `region_of_hexes(region_polygon)` using dense grid + `.intersects()`
+- [x] Tests for all three
 
 Depends on: M2
 
@@ -66,6 +65,7 @@ Depends on: M2, M3
 
 ## Backlog
 
+- M2 leftover: Remove or fold `hex_AoS_to_string` into the new ID scheme.
 - Docstrings to tensorflow / google style.
 - CI workflows: low development volume, not worth the overhead for now
 - `xarray.align` docs: document in notebook prose when redoing tutorial

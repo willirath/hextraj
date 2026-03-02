@@ -12,6 +12,23 @@
 - Use `pixi run python` (not bare `python`) to run Python in this project.
 - Use `pixi run pytest` (or `pixi run test`) to run tests.
 
+## TDD workflow
+
+All non-trivial implementation work follows a test-first loop using subagents:
+
+1. **Test agent (haiku or similar)** — writes failing tests only; does not implement.
+2. **Implementation agent (haiku or similar)** — makes the tests pass; does not add tests.
+3. **Main agent** — runs the tests, reviews results, escalates to a more powerful agent if lower agent struggles, then reports to the user before committing.
+
+Rules:
+- Main agent does not write implementation code directly — delegate to subagents.
+- Prefer haiku or other simpler model for both test and implementation agents; escalate to higher model only if the task is complex or simpler agent fails.
+- Test style: plain `pytest` functions with `@pytest.mark.parametrize`; no test classes.
+
+## Backwards compatibility
+
+This project does not maintain backwards compatibility. Remove dead code without ceremony — no deprecation warnings, no deprecation wrappers, no `_removed` stubs, no tests asserting that something was deleted. If something is gone, it's gone.
+
 ## Python style
 
 Be Pythonic. Don't over-engineer:

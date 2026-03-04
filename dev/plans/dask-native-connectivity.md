@@ -40,7 +40,7 @@ def hex_connectivity(
         cols.append(weight)
     if groupby_cols:
         cols.extend(groupby_cols)
-    ddf = ds[cols].to_dask_dataframe()
+    ddf = ds[cols].to_dask_dataframe(dim_order=["traj", "obs"])  # dim_order controls axis ordering; when chunks are along traj, each traj-chunk maps cleanly to one DataFrame partition
 
     # 2. Label with map_partitions (stays lazy, operates on DataFrame columns)
     ddf["from_id"] = ddf.map_partitions(
@@ -61,8 +61,8 @@ def hex_connectivity(
     return agg
 ```
 
-The user calls `.compute()` when ready, then optionally passes the result
-to `hp.edges_geodataframe()` for geometry.
+The user calls `.compute()` when ready, then optionally attaches geometry
+via one of two post-compute paths described in section 6.
 
 ---
 
@@ -193,6 +193,19 @@ Multiple variables in the Dataset become columns in each partition. The
 conversion is a metadata operation — it rewires the dask graph without
 computing anything.
 
+**`dim_order` and partition alignment:** `to_dask_dataframe()` accepts a
+`dim_order` keyword that controls which axis is the outermost (row-major)
+dimension of the flattened DataFrame. When `dim_order=["traj", "obs"]`,
+rows are ordered traj-major: all obs for trajectory 0 come first, then all
+obs for trajectory 1, and so on. Because dask chunks are also traj-aligned
+(each chunk holds a contiguous block of trajectories), each chunk maps to
+exactly one partition with no cross-chunk row interleaving. This guarantee
+breaks down if `dim_order` is omitted or set to `["obs", "traj"]` —
+xarray may choose a different axis ordering, mixing trajectories across
+partitions and forcing a shuffle. **Always pass `dim_order=["traj", "obs"]`
+explicitly** (or `["traj"]` for purely traj-dimensioned variables) to make
+the chunk-to-partition mapping deterministic.
+
 ### What columns to include
 
 The xr.Dataset assembled before conversion should contain:
@@ -206,6 +219,12 @@ The xr.Dataset assembled before conversion should contain:
 
 Coordinate variables from the original Dataset (e.g. `traj`) become the
 DataFrame index automatically. They can be reset if not needed for groupby.
+
+**Forward-looking note (out of scope for this PR):** `obs` can be retained as
+a regular DataFrame column — via `reset_index` or by including it explicitly
+in `to_dask_dataframe` — to enable later mapping to particle age and
+time-weighted connectivity aggregation. Worth keeping in mind during the
+column assembly step so the door is not accidentally closed.
 
 ### Multi-dimensional case (obs-resolved)
 
@@ -352,28 +371,46 @@ Reasons:
    or feeding the result into further dask operations.
 
 2. **Geometry attachment and metadata enrichment**: After `.compute()`,
-   the result can be enriched with hex metadata (e.g., hex center coordinates,
-   region labels) by joining back to a hex metadata DataFrame or xr.Dataset:
+   the result can be enriched with geometry via two post-compute paths:
+
+   **Option (a) — LineString geometry per OD pair (`edges_geodataframe`):**
+   Connect origin and destination hex centres with a LineString. Useful for
+   flow maps and directional overlays.
 
    ```python
    result = od_counts.compute()
-
-   # Attach geometry
    gdf = hp.edges_geodataframe(
        result.index.get_level_values("from_id"),
        result.index.get_level_values("to_id"),
        count=result.values,
    )
-
-   # Enrich with hex metadata (e.g., centres, region labels)
-   from_centres = hex_metadata.set_index("hex_id").loc[gdf.index.get_level_values("from_id")]
-   gdf["from_center_lon"] = from_centres["lon"].values
-   gdf["from_center_lat"] = from_centres["lat"].values
    ```
 
-   This is analogous to how the heatmap notebook reconstructs bin centers and
-   labels from `pd.cut` categories after computing. The lazy pipeline stays
-   pure; enrichment is a post-compute operation on pandas/geopandas objects.
+   **Option (b) — Destination hex polygon as active geometry:**
+   Join the computed OD counts to a hex polygon GeoDataFrame so each row
+   carries the destination hex polygon as its active geometry. This is more
+   useful for choropleth maps (e.g., "how much flux arrives at each hex?").
+   The `from_id` column is carried alongside as a plain attribute.
+
+   ```python
+   result = od_counts.compute().reset_index()
+   hex_polygons = hp.hex_geodataframe(...)   # GeoDataFrame indexed by hex_id
+   gdf = result.merge(hex_polygons, left_on="to_id", right_index=True)
+   # gdf.geometry is the destination hex polygon (active, used for plotting)
+   # gdf["from_id"] carries the origin hex ID as a regular column
+   ```
+
+   geopandas does not support two active geometry columns. If origin polygon
+   geometry is also needed (e.g., for spatial indexing), it can be carried as
+   an inactive `from_geometry` column:
+
+   ```python
+   gdf["from_geometry"] = hex_polygons.geometry.loc[gdf["from_id"]].values
+   # from_geometry is a plain object column — not the active geometry,
+   # but available for later spatial operations.
+   ```
+
+   The lazy pipeline stays pure; all geometry work is post-compute.
 
 3. **Consistent with dask idioms**: dask users expect lazy return values
    from pipeline functions.
@@ -385,12 +422,20 @@ for users who want a GeoDataFrame immediately:
 
 ```python
 def hex_connectivity_geodataframe(...) -> gpd.GeoDataFrame:
-    """Computes and returns GeoDataFrame with geometry."""
-    result = hex_connectivity(...).compute()
-    return hp.edges_geodataframe(...)
+    """Computes and returns GeoDataFrame with destination hex polygon geometry."""
+    result = hex_connectivity(...).compute().reset_index()
+    hex_polygons = hp.hex_geodataframe(...)
+    gdf = result.merge(hex_polygons, left_on="to_id", right_index=True)
+    # Active geometry: destination hex polygon (for plotting / choropleth).
+    # Optionally carry from_geometry as an inactive column for spatial indexing.
+    gdf["from_geometry"] = hex_polygons.geometry.loc[gdf["from_id"]].values
+    return gdf
 ```
 
-This keeps the lazy core composable while providing a one-call path for
+The returned GeoDataFrame has the destination hex polygon as its active
+geometry (used for plotting). The `from_geometry` column is inactive — not
+used for plotting, but available for spatial indexing or filtering after the
+fact. This keeps the lazy core composable while providing a one-call path for
 users who do not need to control the compute step.
 
 ---

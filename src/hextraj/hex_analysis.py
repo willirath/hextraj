@@ -89,7 +89,7 @@ def hex_connectivity_dask(
         meta=("to_id", np.int64),
     )
 
-    ddf = ddf.drop(columns=["from_lon", "from_lat", "to_lon", "to_lat"])
+    ddf = ddf.drop(columns=["from_lon", "from_lat", "to_lon", "to_lat", obs_dim_new])
     return ddf
 
 

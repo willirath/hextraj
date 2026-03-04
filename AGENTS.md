@@ -12,6 +12,13 @@
 - Always use `pixi run <command>` — never bare `python`, `pytest`, `jupyter`, etc.
 - Examples: `pixi run python`, `pixi run pytest`, `pixi run jupyter nbconvert ...`
 
+## Planning
+
+Plans are written as Markdown files in `dev/plans/`. Planning agents write
+directly to `dev/plans/<name>.md` using file tools — they do **not** use any
+built-in "plan mode" or interactive plan approval flow. Just write the file and
+return.
+
 ## TDD workflow
 
 All non-trivial implementation work follows a test-first loop using subagents:

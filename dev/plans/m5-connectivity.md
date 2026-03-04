@@ -25,7 +25,7 @@ The fix is trivial once you have int64 hex IDs from `hp.label()`:
 
     import pandas as pd
     idx = pd.MultiIndex.from_arrays([from_ids, to_ids], names=["from_id", "to_id"])
-    od_counts = pd.Series(1, index=idx).groupby(level=[0, 1]).sum()
+    od_counts = pd.Series(1, index=idx).groupby(level=[0, 1]).sum()  # OD (Origin-Destination) counts
 
 This is O(N_traj log N_traj). Memory is O(N_traj) not O(N_traj × N_hex²).
 

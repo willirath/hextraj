@@ -19,6 +19,7 @@ hextraj = { path = ".", editable = true }
 dask = "*"
 scipy = "*"
 cartopy = "*"
+zarr = "<3"
 
 [feature.dev.dependencies]
 pytest = "*"
@@ -26,10 +27,12 @@ pytest-cov = "*"
 jupyter = "*"
 nbconvert = "*"
 mypy = "*"
+pooch = "*"
 
 [feature.dev.tasks]
 test = "pytest --cov --cov-report=term-missing"
 mypy = "mypy src/hextraj/"
+fetch-external = "python scripts/fetch_external_data.py"
 
 [environments]
 default = { features = ["full", "dev"], solve-group = "default" }

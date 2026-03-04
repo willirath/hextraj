@@ -80,6 +80,9 @@ target/
 # I want to be able to handle links in here...need to exclude certain file types
 # instead
 
+# External data (not bundled, downloaded separately)
+external/
+
 # Mac OS-specific storage files
 .DS_Store
 

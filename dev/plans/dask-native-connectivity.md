@@ -577,6 +577,24 @@ def ds(chunk_traj):
 
 ---
 
+## Open issues (post-implementation review)
+
+From code review of `hex_connectivity_dask` (2026-03-04):
+
+1. **`expand_dims` wrong for traj-only groupby cols** — `col_arr.expand_dims({obs_dim: n_obs})` produces shape `(obs, traj)` instead of `(traj, obs)`, misaligning values. Fix: `col_arr.broadcast_like(ds["lon"])`.
+
+2. **Missing docstring** — `hex_connectivity_dask` has a one-liner; every other exported function has a full Args/Returns block. Add one.
+
+3. **obs column fragility** — `ds.coords.get(obs_dim, ...)` relies on xarray internals for whether an implicit dimension coordinate survives `to_dask_dataframe` as a named column. Add an explicit test that obs values are correct (not just that the column exists), and verify the fallback path.
+
+4. **`test_npartitions_matches_traj_chunks` fragility** — tests xarray/dask internal behaviour rather than user-visible semantics. May break across versions. Consider relaxing or removing.
+
+5. **`groupby_cols` truthiness** — `if groupby_cols:` treats `[]` and `None` identically; document in docstring.
+
+6. **Chained method call on one line** — `assign_coords(...).rename_dims(...)` should be split for readability.
+
+---
+
 ## Open questions
 
 1. **Obs-resolved connectivity**: should this be a separate function

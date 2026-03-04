@@ -11,6 +11,88 @@ from .hex_id import INVALID_HEX_ID, decode_hex_id
 from .hexproj import HexProj
 
 
+def hex_connectivity_dask(
+    ds,
+    hp,
+    weight=None,
+    groupby_cols=None,
+    obs_dim="obs",
+    traj_dim="traj",
+    lon_var="lon",
+    lat_var="lat",
+):
+    """Build a lazy obs=0 to obs=all connectivity table: one row per (traj, obs).
+
+    Args:
+        ds: xr.Dataset with at least two 2-D variables (traj x obs) for
+            longitude and latitude, backed by dask arrays.
+        hp: HexProj instance used to label lon/lat positions as hex IDs.
+        weight: Optional name of a variable in ds to include as a weight
+            column in the result.  The variable must have the same dimensions
+            as the lon/lat arrays.
+        groupby_cols: Optional list of variable names in ds to carry through
+            as extra columns in the result.  Variables with only the traj
+            dimension are broadcast to (traj, obs) using broadcast_like.
+        obs_dim: Name of the observation dimension in ds.  Defaults to "obs".
+        traj_dim: Name of the trajectory dimension in ds.  Defaults to "traj".
+        lon_var: Name of the longitude variable in ds.  Defaults to "lon".
+        lat_var: Name of the latitude variable in ds.  Defaults to "lat".
+
+    Returns:
+        Lazy dask DataFrame with one row per (traj, obs) combination.
+        Columns always include:
+          - ``from_id``: hex ID at obs index 0 for each trajectory (int64)
+          - ``to_id``: hex ID at the current obs position (int64)
+          - obs coordinate column (named after obs_dim)
+          - traj dimension column (named after traj_dim)
+        Optional columns (present when the corresponding argument is given):
+          - weight column (named after the weight argument)
+          - one column per name in groupby_cols
+        INVALID_HEX_ID (-1) appears in from_id or to_id wherever the input
+        lon/lat values are NaN.
+    """
+    import dask.dataframe as dd
+
+    obs_dim_new = "__obs__"
+
+    from_lon = ds[lon_var].isel({obs_dim: 0}).broadcast_like(ds[lon_var])
+    from_lat = ds[lat_var].isel({obs_dim: 0}).broadcast_like(ds[lat_var])
+
+    var_dict = {
+        "from_lon": from_lon,
+        "from_lat": from_lat,
+        "to_lon": ds[lon_var],
+        "to_lat": ds[lat_var],
+    }
+
+    if weight is not None:
+        var_dict[weight] = ds[weight]
+
+    if groupby_cols:
+        for col in groupby_cols:
+            col_arr = ds[col]
+            if obs_dim not in col_arr.dims:
+                col_arr = col_arr.broadcast_like(ds[lon_var])
+            var_dict[col] = col_arr
+
+    obs_vals = ds.coords.get(obs_dim, xr.DataArray(np.arange(ds.sizes[obs_dim]), dims=[obs_dim]))
+    mini_ds = xr.Dataset(var_dict).assign_coords({obs_dim: obs_vals})
+    mini_ds = mini_ds.rename_dims({obs_dim: obs_dim_new})
+    ddf = mini_ds.to_dask_dataframe(dim_order=[traj_dim, obs_dim_new])
+
+    ddf["from_id"] = ddf.map_partitions(
+        lambda df: pd.Series(hp.label(df["from_lon"].values, df["from_lat"].values), index=df.index),
+        meta=("from_id", np.int64),
+    )
+    ddf["to_id"] = ddf.map_partitions(
+        lambda df: pd.Series(hp.label(df["to_lon"].values, df["to_lat"].values), index=df.index),
+        meta=("to_id", np.int64),
+    )
+
+    ddf = ddf.drop(columns=["from_lon", "from_lat", "to_lon", "to_lat"])
+    return ddf
+
+
 def hex_counts(
     hex_ids: xr.DataArray | pd.Series,
     reduce_dims: str | list[str] | None = None,

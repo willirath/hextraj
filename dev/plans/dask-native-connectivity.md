@@ -6,57 +6,58 @@ The current `hex_connectivity` function materialises dask arrays via
 `.values.ravel()`, breaking laziness. This plan designs a fully lazy pipeline
 from dask-backed xarray Datasets (e.g. from Zarr) through hex labelling,
 xarray-to-dask-DataFrame conversion, and lazy groupby aggregation, producing
-a dask DataFrame of OD counts that is only materialised at the user's
-`.compute()` call. The `hex_conn_dask.ipynb` notebook already demonstrates
-this pattern manually; the goal is to encapsulate it in a clean library
+a dask DataFrame of OD (Origin-Destination) counts that is only materialised at the user's
+`.compute()` call. The goal is to encapsulate this pattern in a clean library
 function that handles weights, metadata groupby keys, and normalisation.
 
 ---
 
 ## Recommended pipeline (pseudocode)
 
+The function computes connectivity for all obs pairs so that the caller can
+select or average over target observations afterwards. There is no `from_obs`
+or `to_obs` parameter in the primary interface — those choices are left to the
+caller via external slicing before passing the dataset in, or by requesting
+obs-resolved output (see section 4).
+
+Note that xarray dimensions and dask DataFrame columns are different concepts.
+When a Dataset is converted via `.to_dask_dataframe()`, dims are flattened into
+columns. The plan uses "columns" consistently when referring to the dask
+DataFrame stage.
+
 ```python
-def hex_connectivity_lazy(
+def hex_connectivity(
     ds,                          # xr.Dataset with lon, lat (dask-backed)
     hp,                          # HexProj instance
-    from_obs=0,                  # obs index for origin
-    to_obs=-1,                   # obs index for destination
-    weight=None,                 # str (column in ds) or xr.DataArray
-    groupby_dims=None,           # extra dims to keep in groupby (e.g. ["release_region"])
+    weight=None,                 # str (variable name in ds) or xr.DataArray
+    groupby_cols=None,           # extra columns to keep in groupby (e.g. ["release_region"])
     obs_dim="obs",               # name of the observation dimension
     traj_dim="traj",             # name of the trajectory dimension
 ):
-    # 1. Slice origin and destination positions
-    lon_from = ds.lon.isel({obs_dim: from_obs})
-    lat_from = ds.lat.isel({obs_dim: from_obs})
-    lon_to   = ds.lon.isel({obs_dim: to_obs})
-    lat_to   = ds.lat.isel({obs_dim: to_obs})
-
-    # 2. Label with da.map_blocks (stays lazy)
-    from_ids = da.map_blocks(hp.label, lon_from.data, lat_from.data, dtype=np.int64)
-    to_ids   = da.map_blocks(hp.label, lon_to.data,   lat_to.data,   dtype=np.int64)
-
-    # 3. Assemble into xr.Dataset, include weight and groupby columns
-    result_ds = xr.Dataset({
-        "from_id": xr.DataArray(from_ids, dims=non_obs_dims),
-        "to_id":   xr.DataArray(to_ids,   dims=non_obs_dims),
-    })
+    # 1. Convert to dask DataFrame directly
+    cols = ["lon", "lat"]
     if weight is not None:
-        result_ds["weight"] = weight_da
-    for dim in groupby_dims:
-        result_ds[dim] = ds[dim]  # or ds.coords[dim]
+        cols.append(weight)
+    if groupby_cols:
+        cols.extend(groupby_cols)
+    ddf = ds[cols].to_dask_dataframe()
 
-    # 4. Convert to dask DataFrame (chunk boundaries → partitions)
-    ddf = result_ds.to_dask_dataframe()
+    # 2. Label with map_partitions (stays lazy, operates on DataFrame columns)
+    ddf["from_id"] = ddf.map_partitions(
+        lambda df: hp.label(df["lon_from"], df["lat_from"]), meta=("from_id", np.int64)
+    )
+    ddf["to_id"] = ddf.map_partitions(
+        lambda df: hp.label(df["lon_to"], df["lat_to"]), meta=("to_id", np.int64)
+    )
 
-    # 5. Lazy groupby aggregation
-    group_keys = groupby_dims + ["from_id", "to_id"]
+    # 3. Lazy groupby aggregation
+    group_keys = (groupby_cols or []) + ["from_id", "to_id"]
     if weight is not None:
-        agg = ddf.groupby(group_keys).agg({"weight": "sum"})
+        agg = ddf.groupby(group_keys).agg({weight: "sum"})
     else:
         agg = ddf.groupby(group_keys).size()
 
-    # 6. Return lazy dask DataFrame (or Series)
+    # 4. Return lazy dask DataFrame (or Series)
     return agg
 ```
 
@@ -78,35 +79,55 @@ A test helper function builds a synthetic `xr.Dataset` with:
 
 ### Implementation
 
+`da.random` can generate random arrays natively without going through numpy
+first. The synthetic helper uses `da.random.uniform` and related functions
+directly. Smoother trajectories built from a random walk would be more
+realistic — this is noted as an option for tests that care about hex-cell
+continuity rather than just correctness of aggregation.
+
 ```python
 def make_synthetic_trajectories(
     n_traj=1000, n_obs=10, chunk_traj=100,
     lon_range=(-10, 10), lat_range=(-5, 5),
     n_regions=3, seed=42,
 ):
-    rng = np.random.default_rng(seed)
+    rng = da.random.default_rng(seed)
     lon = rng.uniform(*lon_range, size=(n_traj, n_obs)).astype(np.float32)
     lat = rng.uniform(*lat_range, size=(n_traj, n_obs)).astype(np.float32)
     # Inject some NaN (beached particles)
     mask = rng.random((n_traj, n_obs)) < 0.05
-    lon[mask] = np.nan
-    lat[mask] = np.nan
+    lon = da.where(mask, np.nan, lon)
+    lat = da.where(mask, np.nan, lat)
+
+    lon = lon.rechunk((chunk_traj, n_obs))
+    lat = lat.rechunk((chunk_traj, n_obs))
 
     ds = xr.Dataset({
-        "lon": (["traj", "obs"], da.from_array(lon, chunks=(chunk_traj, n_obs))),
-        "lat": (["traj", "obs"], da.from_array(lat, chunks=(chunk_traj, n_obs))),
-        "release_region": ("traj", da.from_array(
-            rng.integers(0, n_regions, n_traj), chunks=chunk_traj
-        )),
+        "lon": (["traj", "obs"], lon),
+        "lat": (["traj", "obs"], lat),
+        "release_region": ("traj", rng.integers(0, n_regions, n_traj).rechunk(chunk_traj)),
     })
     return ds
 ```
 
+An alternative builds smoother trajectories via a cumulative random walk
+(`da.cumsum` of small increments) — useful when tests need realistic
+hex-cell transitions rather than purely independent positions.
+
 ### Chunking rationale
 
-Chunk along `traj` (not `obs`) so that each chunk contains full trajectories.
-The `isel(obs=...)` slice is then a cheap within-chunk operation. This mirrors
-real-world Zarr stores where trajectories are the large dimension.
+The right chunking strategy depends on the analysis:
+
+- **Chunk along `traj`** for trajectory-centric analyses (e.g. start-to-end
+  connectivity). Each chunk contains complete trajectories, and `isel(obs=...)`
+  is a cheap within-chunk slice.
+- **Chunk along `obs`** for time-centric analyses (e.g. density snapshots at
+  a given timestep). Each partition spans all trajectories at a subset of obs.
+- **Chunk along both dimensions** for very large datasets where neither
+  dimension fits in memory as a single chunk.
+
+The function imposes no chunking requirement — it works with whatever chunking
+the input Dataset carries.
 
 ---
 
@@ -122,54 +143,39 @@ It cannot accept a raw dask array. Where should labelling happen?
 | Approach | Lazy? | Chunk-aligned? | Complexity |
 |----------|-------|----------------|------------|
 | `xr.apply_ufunc(hp.label, ..., dask="parallelized")` | Yes | Yes | Medium — needs explicit output dtypes and shapes |
-| `da.map_blocks(hp.label, lon.data, lat.data, ...)` | Yes | Yes | Low — proven in notebook |
-| Label inside `ddf.map_partitions(...)` | Yes | Yes | Medium — requires converting back from DataFrame columns |
+| `da.map_blocks(hp.label, lon.data, lat.data, ...)` | Yes | Yes | Low — but accesses `.data`, which is not a stable public API |
+| Label inside `ddf.map_partitions(...)` | Yes | Yes | Low — operates on public DataFrame columns |
 | Label before chunking (eager) | No | N/A | Defeats purpose |
 
-### Recommendation: `da.map_blocks` (already proven)
+### Recommendation: `ddf.map_partitions`
 
-The `hex_conn_dask.ipynb` notebook already demonstrates this pattern
-successfully. `da.map_blocks` calls `hp.label` on each chunk's numpy arrays,
-keeping the result lazy and chunk-aligned. No data shuffles occur.
+`ddf.map_partitions(hp.label, ...)` on the lon/lat columns of the dask
+DataFrame is the recommended approach. It operates on public DataFrame columns,
+stays lazy and chunk-aligned, and avoids accessing `.data` on xr.DataArray
+(which is internal dask array access and not stable public API). This approach
+is also consistent with what the reference heatmap notebook (`004_calculate_heatmaps.ipynb`)
+does.
 
-`xr.apply_ufunc` with `dask="parallelized"` would also work but adds
-boilerplate for specifying output dtypes and core dimensions. Since `hp.label`
-already handles arbitrary array shapes and returns a same-shape int64 array,
-`da.map_blocks` is the simpler path.
+`xr.apply_ufunc` with `dask="parallelized"` is an alternative but adds
+boilerplate for output dtype and core-dimension specifications. `da.map_blocks`
+with `.data` is functional but discouraged as the primary pattern.
 
 ### When to label
 
-Two equivalent approaches:
+Labelling happens **after** converting to dask DataFrame, inside
+`map_partitions`. This is the most direct path:
 
-**Option A: Label before DataFrame conversion (recommended)**
+1. `isel` on the Dataset to select the relevant obs positions (or pass the
+   full dataset for obs-resolved output).
+2. `.to_dask_dataframe()` — a metadata-only graph-rewiring step.
+3. `ddf.map_partitions(hp.label, ...)` on the lon/lat columns to produce
+   `from_id` and `to_id` columns.
+4. `ddf.groupby(...)` for aggregation.
 
-Label **before** converting to dask DataFrame. The labelling operates on
-position arrays (lon, lat) which are naturally chunk-aligned in xarray. After
-conversion to DataFrame, positions are in columns and labelling would require
-`map_partitions` — functionally equivalent but less readable.
-
-The pipeline:
-1. `isel` to select the from/to obs positions (cheap slice per chunk).
-2. `da.map_blocks(hp.label, ...)` on each slice.
-3. Assemble labelled arrays into an `xr.Dataset`.
-4. Convert to dask DataFrame.
-
-**Option B: Label after DataFrame conversion**
-
-Alternatively, `map_partitions(hp.label)` on lon/lat columns after
-`.to_dask_dataframe()` conversion is equally lazy and arguably simpler — it
-avoids needing to reassemble an intermediate xr.Dataset:
-
-```python
-ddf = result_ds.to_dask_dataframe()
-ddf["from_id"] = ddf.map_partitions(
-    lambda df: hp.label(df["lon"], df["lat"]), dtype=np.int64
-)
-```
-
-Both approaches preserve laziness and produce identical results. Option B may
-be preferred for its directness and fewer intermediate objects. Option A is
-closer to the proven `hex_conn_dask.ipynb` notebook pattern.
+This avoids assembling intermediate `xr.Dataset` objects and stays in the
+dask DataFrame world, where groupby is known to scale well (single sweep),
+unlike xarray-based aggregation which can exhibit O(N²) or worse behaviour
+for large unique-pair counts.
 
 ---
 
@@ -193,10 +199,10 @@ The xr.Dataset assembled before conversion should contain:
 
 | Column | Source | Purpose |
 |--------|--------|---------|
-| `from_id` | `da.map_blocks(hp.label, lon_from, lat_from)` | Origin hex ID |
-| `to_id` | `da.map_blocks(hp.label, lon_to, lat_to)` | Destination hex ID |
-| `weight` | User-supplied DataArray, sliced to match | Optional weight per pair |
-| metadata dims | e.g. `release_region`, `ensemble` | Extra groupby keys |
+| `from_id` | `ddf.map_partitions(hp.label, lon_from, lat_from)` | Origin hex ID |
+| `to_id` | `ddf.map_partitions(hp.label, lon_to, lat_to)` | Destination hex ID |
+| `weight` | Variable name carried through from Dataset | Optional weight per pair |
+| metadata columns | e.g. `release_region`, `ensemble` | Extra groupby keys |
 
 Coordinate variables from the original Dataset (e.g. `traj`) become the
 DataFrame index automatically. They can be reset if not needed for groupby.
@@ -204,53 +210,62 @@ DataFrame index automatically. They can be reset if not needed for groupby.
 ### Multi-dimensional case (obs-resolved)
 
 For obs-resolved connectivity (triple index `(obs_step, from_id, to_id)`),
-the full 2D `(traj, obs)` labelling is done first, then from_ids are
-broadcast from obs=0 across all obs steps. The xr.Dataset is stacked
-`(traj, obs_step) -> event` before `.to_dask_dataframe()`. The stack
-is a graph rewiring operation, not a compute.
+the Dataset is stacked `(traj, obs_step) -> event` before
+`.to_dask_dataframe()`, and labelling is applied via `map_partitions` on the
+resulting lon/lat columns. The stack is a graph-rewiring operation, not a
+compute.
 
 ---
 
 ## 4. From/to hex ID construction
 
-### Start-to-end connectivity
+### Design: compute for all obs, let the caller slice
 
-The simplest case: `isel(obs=from_idx)` and `isel(obs=to_idx)` on the
-position arrays, then label each. Both slices share the same chunk structure
-along `traj`, so the resulting dask arrays are aligned without shuffling.
+Rather than accepting `from_obs` / `to_obs` parameters that fix a single pair
+of obs indices, the function computes connectivity across all obs (or the full
+dataset as supplied). The caller slices the Dataset to the obs range of
+interest before calling `hex_connectivity`, or requests obs-resolved output
+and slices/averages the result afterwards. This keeps the function's scope
+narrow and avoids encoding a particular analysis choice in the API.
+
+### Start-to-end connectivity (caller pre-slices)
+
+The caller selects obs indices externally:
 
 ```python
-lon_from = ds.lon.isel(obs=0)    # shape (traj,), chunked
-lon_to   = ds.lon.isel(obs=-1)   # shape (traj,), chunked — same chunks
-from_ids = da.map_blocks(hp.label, lon_from.data, lat_from.data, dtype=np.int64)
-to_ids   = da.map_blocks(hp.label, lon_to.data,   lat_to.data,   dtype=np.int64)
+ds_slice = ds.isel(obs=[0, -1])   # first and last obs
+result = hex_connectivity(ds_slice, hp, ...)
 ```
 
-### Arbitrary from_idx / to_idx
-
-The function accepts integer indices along the obs dimension. Negative
-indexing works naturally via `isel`. The only constraint is that both slices
-reduce the obs dimension to a scalar, producing 1D arrays along `traj`.
+Inside the function, after `.to_dask_dataframe()`, labelling is applied via
+`map_partitions` on the lon/lat columns for each obs step.
 
 ### Obs-resolved connectivity
 
-For the `(obs_step, from_id, to_id)` pattern, label the full 2D array:
+For the `(obs_step, from_id, to_id)` pattern, the Dataset is stacked
+`(traj, obs_step) -> event` before conversion to dask DataFrame. The
+`from_id` at each step is the hex ID at the first obs, broadcast across all
+steps:
 
 ```python
-all_ids = da.map_blocks(hp.label, ds.lon.data, ds.lat.data, dtype=np.int64)
-from_da = da.broadcast_to(all_ids[:, 0:1], all_ids[:, 1:].shape)
-to_da   = all_ids[:, 1:]
+ds_stacked = ds.stack(event=("traj", "obs"))
+ddf = ds_stacked.to_dask_dataframe()
+ddf["hex_id"] = ddf.map_partitions(lambda df: hp.label(df["lon"], df["lat"]),
+                                    meta=("hex_id", np.int64))
+# from_id = hex_id at obs_step=0, repeated per traj; to_id = hex_id at current step
 ```
 
-`broadcast_to` is a zero-copy view — no data duplication. The result is a
-2D pair `(from_id, to_id)` at each `(traj, obs_step)` cell, ready for
-stacking and DataFrame conversion.
+`broadcast_to` of the origin column is a zero-copy view — no data
+duplication. The result is a `(from_id, to_id)` pair at each `(traj,
+obs_step)` cell, ready for groupby.
 
 ### Recommendation
 
-The primary function handles start-to-end (scalar from/to). Obs-resolved
-connectivity is a separate function or a mode flag, since it produces a
-fundamentally different output structure (triple-indexed vs pair-indexed).
+The primary function handles obs-resolved output (all obs pairs). Start-to-end
+is the common special case achieved by pre-slicing the input Dataset to
+`obs=[0, -1]`. Obs-resolved connectivity may become a separate function or a
+mode flag if the output structure differs enough (triple-indexed vs
+pair-indexed) to warrant it.
 
 ---
 
@@ -365,65 +380,53 @@ Reasons:
 
 ### Convenience wrapper
 
-A separate convenience function (or method) can wrap the pipeline end-to-end:
+A separate convenience function (or method) can wrap the pipeline end-to-end
+for users who want a GeoDataFrame immediately:
 
 ```python
-def hex_connectivity_lazy(...) -> dask.dataframe.Series:
-    """Returns lazy dask Series of OD counts."""
-    ...
-
 def hex_connectivity_geodataframe(...) -> gpd.GeoDataFrame:
     """Computes and returns GeoDataFrame with geometry."""
-    result = hex_connectivity_lazy(...).compute()
+    result = hex_connectivity(...).compute()
     return hp.edges_geodataframe(...)
 ```
 
 This keeps the lazy core composable while providing a one-call path for
-users who want a GeoDataFrame immediately.
+users who do not need to control the compute step.
 
 ---
 
 ## 7. Integration with existing API
 
-### Option A: Replace `hex_connectivity` (recommended)
+### Goal: a single `hex_connectivity`
 
-The current `hex_connectivity` accepts `xr.DataArray` of pre-labelled hex
-IDs and calls `.values.ravel()`. The new function should accept the raw
-`xr.Dataset` with `lon`/`lat` and handle labelling internally. This is a
-different interface.
+The project is in early development and makes no backwards-compatibility
+guarantees. The goal is a single `hex_connectivity` function that works for
+both numpy/eager and dask/lazy inputs. There is no need for a parallel
+`hex_connectivity_dask` — the two use cases should be unified under one name.
 
-Since the project does not maintain backwards compatibility, the
-recommended approach is:
+The function detects the input type and dispatches accordingly:
 
-1. **New function `hex_connectivity_dask`** in `hex_analysis.py` that
-   implements the full lazy pipeline.
+- If the input arrays are dask-backed (or the Dataset has dask-backed
+  variables), the function returns a lazy dask DataFrame.
+- If the inputs are numpy/eager, the function materialises the result
+  immediately and returns a pandas DataFrame (or GeoDataFrame, depending
+  on the convenience layer).
 
-2. **Keep `hex_connectivity`** for now, since it operates on pre-labelled
-   DataArrays and is used by `hex_connectivity_power`. It serves a
-   different use case (small, already-materialised data).
+Detection can use `dask.is_dask_collection` or check
+`isinstance(ds["lon"].data, da.Array)`. Dask is not required to be
+installed for the numpy path — the import can be guarded.
 
-3. **Export both** from `__init__.py`.
+### Removing the current `hex_connectivity`
 
-### Why not a `lazy=True` kwarg
-
-Adding `lazy=True` to `hex_connectivity` would require the function to
-accept two fundamentally different input types (pre-labelled DataArray vs
-raw Dataset with lon/lat) and return two different types (GeoDataFrame vs
-dask DataFrame). This violates the principle of functions doing one thing.
-Two separate functions with clear names are better.
-
-### Naming
-
-- `hex_connectivity_dask(ds, hp, ...)` — the lazy pipeline function.
-- `hex_connectivity(hex_ids, ...)` — the existing eager function on
-  pre-labelled DataArrays.
-
-Alternatively, if the eager function is eventually removed:
-- `hex_connectivity(ds, hp, ...)` replaces both.
+The current `hex_connectivity` in `hex_analysis.py` operates on
+pre-labelled `xr.DataArray` hex IDs and calls `.values.ravel()`. The new
+unified function accepts a raw `xr.Dataset` with `lon`/`lat` variables and
+handles labelling internally. The old function should be replaced without a
+deprecation wrapper — if something is gone, it is gone.
 
 ### Module location
 
-Both functions live in `src/hextraj/hex_analysis.py`. No new module needed.
+The function lives in `src/hextraj/hex_analysis.py`. No new module needed.
 
 ---
 
@@ -434,7 +437,7 @@ A demonstration notebook should show:
 1. **Open a chunked dataset** — `xr.open_dataset(path, chunks={"traj": N})`
    or `xr.open_zarr(store)`.
 
-2. **Call `hex_connectivity_dask`** — show the lazy return value, inspect
+2. **Call `hex_connectivity`** — show the lazy return value, inspect
    `.visualize()` or `len(ddf.__dask_graph__())`.
 
 3. **Compute and visualise** — `.compute()`, attach geometry with
@@ -448,11 +451,8 @@ A demonstration notebook should show:
 6. **Normalisation** — divide OD counts by marginal from-hex counts to get
    conditional probabilities.
 
-7. **Timing comparison** — time the lazy pipeline vs the eager
-   `hex_connectivity` on the same dataset.
-
-The existing `hex_conn_dask.ipynb` already covers steps 1-3 manually.
-The notebook should demonstrate the library function doing it in one call.
+7. **Timing comparison** — time the lazy pipeline vs running the same
+   computation eagerly on a small materialised dataset.
 
 ### Performance optimization: `persist()` for intermediate results
 
@@ -482,22 +482,22 @@ directly.
 
 **Unit tests for the lazy pipeline function:**
 
-1. **Return type**: result is a dask DataFrame or Series (not yet computed).
-2. **Correct counts after compute**: compare `.compute()` against the eager
-   `hex_connectivity` on the same small dataset.
-3. **INVALID_HEX_ID propagation**: NaN positions produce INVALID_HEX_ID
+1. **Return type (dask input)**: when the Dataset is dask-backed, the result
+   is a lazy dask DataFrame or Series (not yet computed).
+2. **Return type (numpy input)**: when the Dataset is numpy-backed, the result
+   is a pandas DataFrame or Series (already computed).
+3. **Correct counts**: `.compute()` (or direct result for numpy path) matches
+   a manually constructed count table for a small known dataset.
+4. **INVALID_HEX_ID propagation**: NaN positions produce INVALID_HEX_ID
    in the result.
-4. **Weight column**: weighted sum matches manual computation.
-5. **Groupby dims**: extra groupby keys appear in the result index.
-6. **Chunk independence**: result is identical regardless of chunk size
+5. **Weight column**: weighted sum matches manual computation.
+6. **Groupby columns**: extra groupby keys appear in the result index.
+7. **Chunk independence**: result is identical regardless of chunk size
    (parametrize over `chunk_traj=10, 50, 100`).
-7. **Single-chunk case**: works when the entire dataset fits in one chunk.
+8. **Single-chunk case**: works when the entire dataset fits in one chunk.
 
 **Integration tests:**
 
-8. **Round-trip with `hex_connectivity`**: for a small dataset, the lazy
-   pipeline's `.compute()` result matches the eager function's output
-   (same pairs, same counts).
 9. **Round-trip with `edges_geodataframe`**: the computed result can be
    passed to `hp.edges_geodataframe()` without error.
 
@@ -535,19 +535,18 @@ def ds(chunk_traj):
 ## Open questions
 
 1. **Obs-resolved connectivity**: should this be a separate function
-   (`hex_connectivity_obs_resolved_dask`) or a mode of the same function?
-   The output structure is different (triple-indexed), suggesting a
-   separate function.
+   (`hex_connectivity_obs_resolved`) or a mode flag on `hex_connectivity`?
+   The output structure is different (triple-indexed vs pair-indexed),
+   which suggests a separate function to keep the primary API simple.
 
-2. **`hp.label` on dask arrays directly**: should `HexProj.label` grow a
-   dask-aware code path (detecting dask arrays and calling `map_blocks`
-   internally)? This would simplify the pipeline but couples `HexProj` to
-   dask. Current recommendation: keep `hp.label` numpy-only, use
-   `da.map_blocks` externally.
+2. **`hp.label` dask-awareness**: should `HexProj.label` grow a dask-aware
+   code path (detecting dask arrays and dispatching via `map_blocks`
+   internally)? This would allow `label` to be called directly on dask
+   arrays, but it couples `HexProj` to dask. Current recommendation: keep
+   `hp.label` numpy-only; call it via `ddf.map_partitions` for the dask path.
 
-3. **Filtering INVALID before groupby**: the notebook filters
-   `ddf[(ddf.from_id != INVALID_HEX_ID) & ...]` before groupby. Should
-   the library function do this by default, with an opt-in
+3. **Filtering INVALID before groupby**: should the library function filter
+   out INVALID_HEX_ID rows before groupby by default, with an opt-in
    `include_invalid=True`? Current recommendation: filter by default
    (most users want valid-only connectivity), with `include_invalid=True`
    to keep the INVALID bucket.

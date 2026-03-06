@@ -23,6 +23,11 @@ def hex_connectivity_dask(
 ):
     """Build a lazy obs=0 to obs=all connectivity table: one row per (traj, obs).
 
+    The function internally rechunks the obs dimension to -1 (full) so that
+    each dask partition contains complete trajectories.  For inputs already
+    chunked that way this is essentially a no-op; for obs-chunked inputs the
+    rechunk happens once, upfront.
+
     Args:
         ds: xr.Dataset with at least two 2-D variables (traj x obs) for
             longitude and latitude, backed by dask arrays.
@@ -53,14 +58,14 @@ def hex_connectivity_dask(
     """
     import dask.dataframe as dd
 
+    # Rechunk obs to full so each partition has all obs steps per trajectory.
+    ds = ds.chunk({obs_dim: -1})
+
     obs_dim_new = "__obs__"
 
-    from_lon = ds[lon_var].isel({obs_dim: 0}).broadcast_like(ds[lon_var])
-    from_lat = ds[lat_var].isel({obs_dim: 0}).broadcast_like(ds[lat_var])
+    obs_vals = ds.coords.get(obs_dim, xr.DataArray(np.arange(ds.sizes[obs_dim]), dims=[obs_dim]))
 
     var_dict = {
-        "from_lon": from_lon,
-        "from_lat": from_lat,
         "to_lon": ds[lon_var],
         "to_lat": ds[lat_var],
     }
@@ -75,21 +80,31 @@ def hex_connectivity_dask(
                 col_arr = col_arr.broadcast_like(ds[lon_var])
             var_dict[col] = col_arr
 
-    obs_vals = ds.coords.get(obs_dim, xr.DataArray(np.arange(ds.sizes[obs_dim]), dims=[obs_dim]))
     mini_ds = xr.Dataset(var_dict).assign_coords({obs_dim: obs_vals})
     mini_ds = mini_ds.rename_dims({obs_dim: obs_dim_new})
     ddf = mini_ds.to_dask_dataframe(dim_order=[traj_dim, obs_dim_new])
 
-    ddf["from_id"] = ddf.map_partitions(
-        lambda df: pd.Series(hp.label(df["from_lon"].values, df["from_lat"].values), index=df.index),
-        meta=("from_id", np.int64),
-    )
-    ddf["to_id"] = ddf.map_partitions(
-        lambda df: pd.Series(hp.label(df["to_lon"].values, df["to_lat"].values), index=df.index),
-        meta=("to_id", np.int64),
-    )
+    # Build meta for map_partitions output: input meta + to_id + from_id columns.
+    meta_in = ddf._meta
+    meta = meta_in.assign(to_id=pd.Series(dtype=np.int64), from_id=pd.Series(dtype=np.int64))
 
-    ddf = ddf.drop(columns=["from_lon", "from_lat", "to_lon", "to_lat", obs_dim_new])
+    def _label(df):
+        to_id = pd.Series(
+            hp.label(df["to_lon"].values, df["to_lat"].values),
+            index=df.index,
+            name="to_id",
+        )
+        # obs_dim_new contains 0-based position indices; index 0 is obs step 0.
+        obs0_rows = df[df[obs_dim_new] == 0]
+        from_id_map = dict(zip(
+            obs0_rows[traj_dim],
+            hp.label(obs0_rows["to_lon"].values, obs0_rows["to_lat"].values),
+        ))
+        from_id = df[traj_dim].map(from_id_map).rename("from_id").astype(np.int64)
+        return pd.concat([df, to_id, from_id], axis=1)
+
+    ddf = ddf.map_partitions(_label, meta=meta)
+    ddf = ddf.drop(columns=["to_lon", "to_lat", obs_dim_new])
     return ddf
 
 

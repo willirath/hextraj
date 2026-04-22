@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import xarray as xr
+import dask
 import dask.array as da
 import dask.dataframe as dd
 import geopandas as gpd
@@ -334,3 +335,84 @@ def test_geometry_batched_not_per_hex(hex_ids_dask, hp, monkeypatch):
     monkeypatch.setattr(HexProj, "hex_corners_lon_lat", _raise)
     result = hex_counts(hex_ids_dask, hp=hp)
     assert isinstance(result, gpd.GeoDataFrame)
+
+
+# ---------------------------------------------------------------------------
+# Regression tests for critical review findings
+# ---------------------------------------------------------------------------
+
+
+def test_partial_reduction_does_not_embed_full_size_numpy_array(hp, monkeypatch):
+    """Regression guard for the OOM bug in issue #32's partial-reduction
+    path.  When hex_ids is dask-backed with a numpy-backed coord, the
+    broadcast keep-dim column must be chunked (dask) inside the pipeline
+    before it is placed into the Dataset that feeds to_dask_dataframe.
+
+    Without the fix, the broadcast coord is a numpy DataArray that gets
+    passed directly to xr.Dataset, creating a mixed numpy/dask Dataset.
+    to_dask_dataframe then has to materialise the full (n_traj, n_obs)
+    numpy array in each partition — the OOM bug.  With the fix the
+    broadcast coord is chunked to match hex_ids before Dataset construction,
+    so to_dask_dataframe only ever sees dask-backed variables."""
+    n_traj, n_obs = 200, 50
+    rng = np.random.default_rng(0)
+    lon = da.from_array(
+        rng.uniform(-10, 10, (n_traj, n_obs)), chunks=(50, n_obs),
+    )
+    lat = da.from_array(
+        rng.uniform(-5, 5, (n_traj, n_obs)), chunks=(50, n_obs),
+    )
+    hex_ids = xr.apply_ufunc(
+        hp.label,
+        xr.DataArray(lon, dims=("traj", "obs")),
+        xr.DataArray(lat, dims=("traj", "obs")),
+        dask="parallelized", output_dtypes=[np.int64],
+    )
+    hex_ids = xr.DataArray(
+        hex_ids, dims=("traj", "obs"),
+        coords={"traj": np.arange(n_traj)},   # numpy-backed coord
+    )
+
+    # Intercept xr.Dataset construction to verify that all keep-dim coord
+    # variables are dask-backed before they enter to_dask_dataframe.
+    # Without the fix, the broadcast coord is numpy; with the fix it is
+    # first chunked to match hex_ids so every variable in the Dataset is dask.
+    _original_Dataset_init = xr.Dataset.__init__
+    numpy_vars_in_dataset = []
+
+    def _patched_Dataset_init(self, data_vars=None, *args, **kwargs):
+        if data_vars is not None:
+            for name, val in (data_vars.items() if isinstance(data_vars, dict) else []):
+                if name != "__hex_id__" and isinstance(val, xr.DataArray):
+                    if not dask.is_dask_collection(val) and val.shape == (n_traj, n_obs):
+                        numpy_vars_in_dataset.append((name, val.shape))
+        return _original_Dataset_init(self, data_vars, *args, **kwargs)
+
+    monkeypatch.setattr(xr.Dataset, "__init__", _patched_Dataset_init)
+
+    result = hex_counts_lazy(hex_ids, reduce_dims=["obs"])
+
+    assert not numpy_vars_in_dataset, (
+        f"xr.Dataset received numpy-backed DataArray(s) for keep-dim coord(s): "
+        f"{numpy_vars_in_dataset}. "
+        f"This is the OOM bug from issue #32 — the broadcast keep-dim coord "
+        f"must be chunked to match hex_ids before Dataset construction so that "
+        f"to_dask_dataframe never materialises a full (n_traj, n_obs) numpy array."
+    )
+
+
+def test_reduce_dims_unknown_name_raises(hp):
+    """Regression guard for review finding #2: reduce_dims containing a dim
+    name not present in hex_ids must raise rather than silently no-op.
+
+    When 'nonexistent' is not a real dim, keep_dims ends up equal to all dims
+    and the partial-reduction path runs with every dim kept, producing a result
+    with a 'nonexistent'-shaped (empty) reduction and no error.  The correct
+    behaviour is to surface the mistake immediately.
+    """
+    lon = np.array([[0.0, 10.0, 20.0], [30.0, 40.0, 50.0]])
+    lat = np.zeros((2, 3))
+    hex_ids = xr.DataArray(hp.label(lon, lat), dims=("traj", "obs"))
+
+    with pytest.raises(Exception):
+        hex_counts(hex_ids, reduce_dims=["nonexistent"], hp=hp)

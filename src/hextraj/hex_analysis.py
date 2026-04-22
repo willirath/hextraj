@@ -7,6 +7,7 @@ import pandas as pd
 import xarray as xr
 import geopandas as gpd
 import dask
+import dask.array as da
 import dask.dataframe as dd
 from shapely.geometry import LineString
 
@@ -172,6 +173,13 @@ def hex_counts_lazy(
     elif reduce_dims is None or len(reduce_dims) == 0:
         reduce_dims = list(hex_ids.dims)
 
+    unknown = set(reduce_dims) - set(hex_ids.dims)
+    if unknown:
+        raise ValueError(
+            f"reduce_dims contains dims not on hex_ids: {sorted(unknown)}. "
+            f"Available dims: {list(hex_ids.dims)}"
+        )
+
     all_dims = list(hex_ids.dims)
     keep_dims = [d for d in all_dims if d not in reduce_dims]
 
@@ -198,7 +206,12 @@ def hex_counts_lazy(
     var_dict = {"__hex_id__": hex_ids}
     for d in keep_dims:
         coord = hex_ids.coords.get(d, xr.DataArray(np.arange(hex_ids.sizes[d]), dims=[d]))
-        var_dict[d] = coord.broadcast_like(hex_ids)
+        coord = coord.broadcast_like(hex_ids)
+        if dask.is_dask_collection(hex_ids):
+            coord = coord.chunk(
+                {dim: hex_ids.chunks[hex_ids.dims.index(dim)] for dim in hex_ids.dims}
+            )
+        var_dict[d] = coord
 
     mini_ds = xr.Dataset(var_dict)
     ddf = mini_ds.to_dask_dataframe(dim_order=dim_order)

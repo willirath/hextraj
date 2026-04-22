@@ -45,6 +45,51 @@ Be Pythonic. Don't over-engineer:
 - No defensive error handling for misuse of user-facing functions — let them raise naturally so the human sees the real error.
 - Prefer simple, idiomatic constructs over clever abstractions.
 
+## Docstrings
+
+Google / TensorFlow style across the codebase — consistency matters. For a public
+or semi-public function:
+
+```python
+def hex_counts(hex_ids, reduce_dims=None, hp=None):
+    """One-line summary, imperative mood, ends with a period.
+
+    Optional longer description goes here, wrapped to ~80 columns. Link
+    related functions by name (``HexProj.to_geodataframe``) rather than
+    path.
+
+    Args:
+        hex_ids: Short description. Include accepted types inline when
+            they matter (``xr.DataArray``, ``pd.Series``, or ``dd.Series``).
+        reduce_dims: Short description. Default behaviour spelled out
+            when non-obvious (e.g. "``None`` and ``[]`` both mean reduce
+            all dims").
+        hp: Short description. ``None`` defers to a default.
+
+    Returns:
+        GeoDataFrame with ... Describe shape, index, and columns.
+        INVALID_HEX_ID (-1) preserved as a regular row with geometry=None.
+
+    Raises:
+        ValueError: When ``reduce_dims`` names a dim not on ``hex_ids``.
+    """
+```
+
+Rules:
+
+- `Args:` / `Returns:` / `Raises:` / `Notes:` — in that order, only the
+  sections that apply. No NumPy-style underlines (no `Parameters\n---`).
+- Signature carries type annotations at the top-level union layer
+  (`xr.DataArray | pd.Series | dd.Series`). Don't repeat the full type in
+  the `Args:` line; mention types inline only when they clarify the prose.
+  Don't strip annotations from the signature just to move them into the
+  docstring.
+- One-line summary first, blank line, then optional paragraph, then the
+  sections. Wrap prose at ~80 columns; indent continuation lines under
+  the parameter name by four spaces.
+- Private helpers (leading underscore) can have a terse one-liner; full
+  sections are only required when behaviour is non-obvious.
+
 ## Jupyter notebooks
 
 Notebooks follow a **human-facing literate programming** style:

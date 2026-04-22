@@ -112,49 +112,45 @@ def hex_connectivity_dask(
 
 
 def hex_counts_lazy(
-    hex_ids,
-    reduce_dims=None,
-):
-    """Lazy count-only form of hex_counts.  No geometry.
+    hex_ids: xr.DataArray | pd.Series | dd.Series,
+    reduce_dims: str | list[str] | None = None,
+) -> dd.Series | dd.DataFrame | pd.Series | pd.DataFrame:
+    """Count hex visits lazily, without attaching geometry.
 
-    Returns count tables without materialising geometry.  Suitable for
-    streaming to parquet or zarr:
-    ``hex_counts_lazy(hex_ids).to_parquet("counts.parquet")``.
+    Companion to ``hex_counts`` for streaming to parquet or zarr:
+    ``hex_counts_lazy(hex_ids).to_parquet("counts.parquet")``. The
+    aggregation stays in dask.dataframe; the caller materialises when
+    ready. For dask-backed inputs peak memory scales with unique hex IDs
+    per partition, not total rows.
 
-    Parameters
-    ----------
-    hex_ids : xr.DataArray, pd.Series, or dd.Series
-        Hex IDs to count.  For xr.DataArray inputs the array must contain
-        int64 values produced by HexProj.label.  INVALID_HEX_ID (-1) is
-        preserved as an ordinary value.
-    reduce_dims : str, list[str], or None
-        Dimensions to aggregate over.  ``None`` (default) and ``[]`` both
-        mean *reduce all dims* — the result is a Series indexed by hex_id.
-        A non-empty list specifies which dims to collapse; remaining dims
-        become columns in the returned DataFrame.
+    Args:
+        hex_ids: Hex IDs to count. ``xr.DataArray``, ``pd.Series``, or
+            ``dd.Series`` of int64 values (as produced by
+            ``HexProj.label``). INVALID_HEX_ID (-1) is preserved.
+        reduce_dims: Dimensions to aggregate over. ``None`` (default) and
+            ``[]`` both mean *reduce all dims*. A non-empty list collapses
+            the named dims; remaining dims become columns in the returned
+            DataFrame. Ignored for ``pd.Series`` / ``dd.Series`` inputs.
 
-        For pd.Series / dd.Series inputs this parameter is ignored.
+    Returns:
+        Full reduction: a Series indexed by ``hex_id`` with count values
+        (``dd.Series`` for dask-backed input, ``pd.Series`` otherwise).
 
-    Returns
-    -------
-    dd.Series or pd.Series
-        Full reduction (reduce_dims is None, [], or covers all dims):
-        Series indexed by ``hex_id``, values are counts.  Returns a dask
-        Series for dask-backed inputs, an eager pandas Series otherwise.
-    dd.DataFrame or pd.DataFrame
-        Partial reduction: DataFrame with columns ``(*keep_dims, "hex_id",
-        "count")``.  Parquet/zarr-writable without further reshaping.
-        Returns a dask DataFrame for dask-backed inputs, pandas otherwise.
+        Partial reduction: a DataFrame with columns
+        ``(*keep_dims, "hex_id", "count")``, parquet/zarr-writable
+        without reshaping (``dd.DataFrame`` or ``pd.DataFrame``).
 
-    Notes
-    -----
-    INVALID_HEX_ID (-1) is preserved as an ordinary row.
+        Order is not guaranteed; call ``.sort_index()`` or use
+        ``hex_counts`` for a sorted, geometry-attached GeoDataFrame.
 
-    Performance is best when ``hex_ids`` is chunked along ``keep_dims``.
-    Misalignment triggers a dask shuffle during aggregation.
+    Raises:
+        ValueError: When ``reduce_dims`` names a dim not on ``hex_ids``.
+        TypeError: When ``hex_ids`` is not one of the accepted types.
 
-    The lazy result is unsorted; call ``.compute().sort_index()`` or
-    ``hex_counts(...)`` for a sorted, geometry-attached GeoDataFrame.
+    Notes:
+        Performance is best when ``hex_ids`` is chunked along
+        ``keep_dims``. Misalignment triggers a dask shuffle during
+        aggregation; no silent rechunking is performed.
     """
     # Series inputs: short-circuit directly to value_counts.
     if isinstance(hex_ids, (pd.Series, dd.Series)):
@@ -226,24 +222,13 @@ def hex_counts_lazy(
     return counts
 
 
-def _attach_geometry(counts, hp):
-    """Compute polygon geometry for each hex and attach to the counts table.
+def _attach_geometry(counts, hp: HexProj) -> gpd.GeoDataFrame:
+    """Attach hex polygon geometry to a counts Series or DataFrame.
 
-    Parameters
-    ----------
-    counts : pd.Series or pd.DataFrame (or dask equivalents)
-        Output of hex_counts_lazy: Series indexed by hex_id (full reduction)
-        or DataFrame with columns (*keep_dims, "hex_id", "count") (partial).
-    hp : HexProj
-        Used to build polygon geometries via the batched to_geodataframe path.
-
-    Returns
-    -------
-    gpd.GeoDataFrame
-        Eager GeoDataFrame with count and geometry columns.
-        Full reduction: single-level index named "hex_id", sorted.
-        Partial reduction: MultiIndex (*keep_dims, "hex_id"), sorted.
-        INVALID_HEX_ID rows have geometry=None.
+    Computes the geometry once per unique hex via
+    ``HexProj.to_geodataframe`` and broadcasts via ``reindex``.
+    ``INVALID_HEX_ID`` rows carry ``geometry=None``. Result is sorted
+    by index.
     """
     if dask.is_dask_collection(counts):
         counts = counts.compute()
@@ -276,44 +261,40 @@ def _attach_geometry(counts, hp):
 
 
 def hex_counts(
-    hex_ids,
-    reduce_dims=None,
-    hp=None,
-):
-    """Count hex visits, optionally keeping a subset of dims as index levels.
+    hex_ids: xr.DataArray | pd.Series | dd.Series,
+    reduce_dims: str | list[str] | None = None,
+    hp: HexProj | None = None,
+) -> gpd.GeoDataFrame:
+    """Count hex visits and attach polygon geometry to the result.
 
-    Parameters
-    ----------
-    hex_ids : xr.DataArray, pd.Series, or dd.Series
-        Hex IDs to count.  Must contain int64 values (from HexProj.label).
-        INVALID_HEX_ID (-1) is preserved as an ordinary row with
-        geometry=None.
-    reduce_dims : str, list[str], or None
-        Dimensions to aggregate over.  ``None`` (default) and ``[]`` both
-        mean *reduce all dims* — the result has a flat "hex_id" index.
-        A non-empty list specifies which dims to collapse; remaining dims
-        become leading levels of the MultiIndex.
+    Aggregation is lazy for dask-backed inputs — the small count table
+    is materialised and decorated with geometry on return. For a fully
+    lazy form (no geometry, streaming to parquet/zarr), use
+    ``hex_counts_lazy``.
 
-        For pd.Series / dd.Series inputs this parameter is ignored.
-    hp : HexProj or None
-        Instance used for polygon geometry.  If None a default HexProj is
-        created.
+    Args:
+        hex_ids: Hex IDs to count. ``xr.DataArray``, ``pd.Series``, or
+            ``dd.Series`` of int64 values. INVALID_HEX_ID (-1) is
+            preserved as a regular row with ``geometry=None``.
+        reduce_dims: Dimensions to aggregate over. ``None`` (default) and
+            ``[]`` both mean *reduce all dims*. A non-empty list
+            collapses the named dims; remaining dims become leading
+            levels of a MultiIndex. Ignored for ``pd.Series`` /
+            ``dd.Series`` inputs.
+        hp: Projection used to build polygon geometry. A default
+            ``HexProj()`` is created when ``None``.
 
-    Returns
-    -------
-    gpd.GeoDataFrame
-        Full reduction: single-level index named "hex_id", sorted by hex_id.
-        Columns: ``count`` (int64), ``geometry`` (Polygon or None).
+    Returns:
+        GeoDataFrame with:
+          - Index: ``"hex_id"`` (full reduction) or MultiIndex
+            ``(*keep_dims, "hex_id")`` (partial reduction), sorted.
+          - Column ``count``: int64 visit count.
+          - Column ``geometry``: Polygon for valid hex IDs, ``None`` for
+            INVALID_HEX_ID.
 
-        Partial reduction: MultiIndex (*keep_dims, "hex_id"), sorted.
-        Same columns.
-
-    Notes
-    -----
-    Aggregation is lazy for dask-backed inputs; the small count table is
-    materialised and decorated with hex polygon geometry on return.
-
-    INVALID_HEX_ID (-1) is preserved as an ordinary row with geometry=None.
+    Raises:
+        ValueError: When ``reduce_dims`` names a dim not on ``hex_ids``.
+        TypeError: When ``hex_ids`` is not one of the accepted types.
     """
     if hp is None:
         hp = HexProj()

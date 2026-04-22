@@ -1,5 +1,6 @@
 # hextraj
 
+[![PyPI](https://img.shields.io/pypi/v/hextraj)](https://pypi.org/project/hextraj/)
 [![License:MIT](https://img.shields.io/badge/License-MIT-lightgray.svg?style=flt-square)](LICENSE)
 [![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://willirath.github.io/hextraj/)
 
@@ -31,13 +32,19 @@ Explore the notebooks:
 ## Installation
 
 ```shell
-python -m pip install git+https://github.com/willirath/hextraj.git@main
+pip install hextraj
 ```
 
-For dask, scipy, and cartopy support:
+With dask, scipy, and cartopy:
 
 ```shell
-python -m pip install "hextraj[full] @ git+https://github.com/willirath/hextraj.git@main"
+pip install hextraj[full]
+```
+
+Or from source:
+
+```shell
+pip install git+https://github.com/willirath/hextraj.git@main
 ```
 
 ## Quick example

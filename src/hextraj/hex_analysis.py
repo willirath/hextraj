@@ -41,8 +41,9 @@ def hex_connectivity_dask(
             column in the result.  The variable must have the same dimensions
             as the lon/lat arrays.
         groupby_cols: Optional list of variable names in ds to carry through
-            as extra columns in the result.  Variables with only the traj
-            dimension are broadcast to (traj, obs) using broadcast_like.
+            as extra columns in the result.  Variables with fewer dims than
+            the lon/lat arrays are broadcast automatically by
+            ``to_dask_dataframe``.
         obs_dim: Name of the observation dimension in ds.  Defaults to "obs".
         traj_dim: Name of the trajectory dimension in ds.  Defaults to "traj".
         lon_var: Name of the longitude variable in ds.  Defaults to "lon".
@@ -64,51 +65,33 @@ def hex_connectivity_dask(
     # Rechunk obs to full so each partition has all obs steps per trajectory.
     ds = ds.chunk({obs_dim: -1})
 
-    obs_dim_new = "__obs__"
-
-    obs_vals = ds.coords.get(obs_dim, xr.DataArray(np.arange(ds.sizes[obs_dim]), dims=[obs_dim]))
-
-    var_dict = {
-        "to_lon": ds[lon_var],
-        "to_lat": ds[lat_var],
-    }
-
+    var_dict = {"to_lon": ds[lon_var], "to_lat": ds[lat_var]}
     if weight is not None:
         var_dict[weight] = ds[weight]
-
     if groupby_cols:
         for col in groupby_cols:
-            col_arr = ds[col]
-            if obs_dim not in col_arr.dims:
-                col_arr = col_arr.broadcast_like(ds[lon_var])
-            var_dict[col] = col_arr
+            var_dict[col] = ds[col]
 
-    mini_ds = xr.Dataset(var_dict).assign_coords({obs_dim: obs_vals})
-    mini_ds = mini_ds.rename_dims({obs_dim: obs_dim_new})
-    ddf = mini_ds.to_dask_dataframe(dim_order=[traj_dim, obs_dim_new])
+    coords = {obs_dim: ds.coords[obs_dim]} if obs_dim in ds.coords else {}
+    mini_ds = xr.Dataset(var_dict, coords=coords)
+    ddf = mini_ds.to_dask_dataframe(dim_order=[traj_dim, obs_dim])
 
-    # Build meta for map_partitions output: input meta + to_id + from_id columns.
-    meta_in = ddf._meta
-    meta = meta_in.assign(to_id=pd.Series(dtype=np.int64), from_id=pd.Series(dtype=np.int64))
+    meta = ddf._meta.drop(columns=["to_lon", "to_lat"]).assign(
+        to_id=pd.Series(dtype=np.int64),
+        from_id=pd.Series(dtype=np.int64),
+    )
 
     def _label(df):
-        to_id = pd.Series(
-            hp.label(df["to_lon"].values, df["to_lat"].values),
-            index=df.index,
-            name="to_id",
-        )
-        # obs_dim_new contains 0-based position indices; index 0 is obs step 0.
-        obs0_rows = df[df[obs_dim_new] == 0]
+        to_id = hp.label(df["to_lon"].values, df["to_lat"].values).astype(np.int64)
+        obs0 = df.groupby(traj_dim, sort=False).head(1)
         from_id_map = dict(zip(
-            obs0_rows[traj_dim],
-            hp.label(obs0_rows["to_lon"].values, obs0_rows["to_lat"].values),
+            obs0[traj_dim],
+            hp.label(obs0["to_lon"].values, obs0["to_lat"].values).astype(np.int64),
         ))
-        from_id = df[traj_dim].map(from_id_map).rename("from_id").astype(np.int64)
-        return pd.concat([df, to_id, from_id], axis=1)
+        from_id = df[traj_dim].map(from_id_map).astype(np.int64)
+        return df.assign(to_id=to_id, from_id=from_id).drop(columns=["to_lon", "to_lat"])
 
-    ddf = ddf.map_partitions(_label, meta=meta)
-    ddf = ddf.drop(columns=["to_lon", "to_lat", obs_dim_new])
-    return ddf
+    return ddf.map_partitions(_label, meta=meta)
 
 
 def hex_counts_lazy(
@@ -178,47 +161,24 @@ def hex_counts_lazy(
 
     all_dims = list(hex_ids.dims)
     keep_dims = [d for d in all_dims if d not in reduce_dims]
+    is_dask_backed = dask.is_dask_collection(hex_ids)
+
+    # Convert to dataframe (dask or pandas).
+    ds = hex_ids.to_dataset(name="hex_id")
+    if is_dask_backed:
+        frame = ds.to_dask_dataframe(dim_order=list(hex_ids.dims))
+    else:
+        frame = ds.to_dataframe().reset_index()
 
     # Full reduction: collapse to a single Series.
     if not keep_dims:
-        # Wrap in dataset and convert to dask dataframe — never touch .values.
-        if not dask.is_dask_collection(hex_ids):
-            hex_ids = hex_ids.chunk(hex_ids.sizes)
-        ds = hex_ids.to_dataset(name="__hex_id__")
-        ddf = ds.to_dask_dataframe(dim_order=list(hex_ids.dims))
-        counts = ddf["__hex_id__"].value_counts(sort=False)
+        counts = frame["hex_id"].value_counts(sort=False)
         counts.index.name = "hex_id"
-        # For numpy-backed DataArrays, compute eagerly.
-        if not dask.is_dask_collection(hex_ids.data):
-            counts = counts.compute()
         return counts
 
-    # Partial reduction.
-    if not dask.is_dask_collection(hex_ids):
-        hex_ids = hex_ids.chunk(hex_ids.sizes)
-
-    dim_order = keep_dims + [d for d in all_dims if d in reduce_dims]
-
-    var_dict = {"__hex_id__": hex_ids}
-    for d in keep_dims:
-        coord = hex_ids.coords.get(d, xr.DataArray(np.arange(hex_ids.sizes[d]), dims=[d]))
-        coord = coord.broadcast_like(hex_ids)
-        if dask.is_dask_collection(hex_ids):
-            coord = coord.chunk(
-                {dim: hex_ids.chunks[hex_ids.dims.index(dim)] for dim in hex_ids.dims}
-            )
-        var_dict[d] = coord
-
-    mini_ds = xr.Dataset(var_dict)
-    ddf = mini_ds.to_dask_dataframe(dim_order=dim_order)
-    counts = ddf.groupby(keep_dims + ["__hex_id__"]).size().rename("count")
+    # Partial reduction: groupby on keep_dims and hex_id.
+    counts = frame.groupby(keep_dims + ["hex_id"]).size().rename("count")
     counts = counts.reset_index()
-    counts = counts.rename(columns={"__hex_id__": "hex_id"})
-
-    # For numpy-backed DataArrays, compute eagerly.
-    if not dask.is_dask_collection(hex_ids.data):
-        counts = counts.compute()
-
     return counts
 
 
@@ -369,27 +329,44 @@ def hex_connectivity(
     from_slice = hex_ids.isel({from_dim: from_idx})
     to_slice = hex_ids.isel({to_dim: to_idx})
 
-    # Flatten to 1D
-    from_ids = from_slice.values.ravel()
-    to_ids = to_slice.values.ravel()
+    is_dask = dask.is_dask_collection(hex_ids.data) or (
+        weight is not None and dask.is_dask_collection(weight.data)
+    )
 
-    # Get weights if provided
+    from_flat = from_slice.data.ravel()
+    to_flat = to_slice.data.ravel()
+
     if weight is not None:
-        weight_slice = weight.isel({to_dim: to_idx})
-        weights = weight_slice.values.ravel()
+        w_flat = weight.isel({to_dim: to_idx}).data.ravel().astype(float)
     else:
-        weights = np.ones_like(from_ids, dtype=float)
+        if is_dask:
+            w_flat = da.ones_like(from_flat, dtype=float)
+        else:
+            w_flat = np.ones_like(from_flat, dtype=float)
 
-    # Create (from_id, to_id) pairs and sum weights
-    pairs = list(zip(from_ids, to_ids))
-    pair_to_weight = {}
-    for (f_id, t_id), w in zip(pairs, weights):
-        key = (int(f_id), int(t_id))
-        pair_to_weight[key] = pair_to_weight.get(key, 0.0) + float(w)
+    if is_dask:
+        from_flat = from_flat.astype(np.int64)
+        to_flat = to_flat.astype(np.int64)
+        df = dd.concat(
+            [
+                dd.from_dask_array(from_flat, columns="from_id"),
+                dd.from_dask_array(to_flat, columns="to_id"),
+                dd.from_dask_array(w_flat, columns="w"),
+            ],
+            axis=1,
+        )
+        agg = df.groupby(["from_id", "to_id"])["w"].sum().compute()
+    else:
+        df = pd.DataFrame({
+            "from_id": np.asarray(from_flat).astype(np.int64),
+            "to_id": np.asarray(to_flat).astype(np.int64),
+            "w": np.asarray(w_flat, dtype=float),
+        })
+        agg = df.groupby(["from_id", "to_id"])["w"].sum()
 
-    from_ids_array = np.array([k[0] for k in pair_to_weight.keys()], dtype=np.int64)
-    to_ids_array = np.array([k[1] for k in pair_to_weight.keys()], dtype=np.int64)
-    counts_array = np.array(list(pair_to_weight.values()))
+    from_ids_array = agg.index.get_level_values("from_id").to_numpy().astype(np.int64)
+    to_ids_array = agg.index.get_level_values("to_id").to_numpy().astype(np.int64)
+    counts_array = agg.to_numpy()
 
     geometries = _build_edge_geometries(from_ids_array, to_ids_array, hp)
 

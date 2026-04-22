@@ -23,13 +23,13 @@ return.
 
 All non-trivial implementation work follows a test-first loop using subagents:
 
-1. **Test agent (haiku or similar)** — writes failing tests only; does not implement.
-2. **Implementation agent (haiku or similar)** — makes the tests pass; does not add tests.
-3. **Main agent** — runs the tests, reviews results, escalates to a more powerful agent if lower agent struggles, then reports to the user before committing.
+1. **Test agent** — writes failing tests only; does not implement.
+2. **Implementation agent** — makes the tests pass; does not add tests.
+3. **Main agent** — runs the tests, reviews results, escalates if the subagent struggles, then reports to the user before committing.
 
 Rules:
 - Main agent does not write implementation code directly — delegate to subagents.
-- Prefer haiku or other simpler model for both test and implementation agents; escalate to higher model only if the task is complex or simpler agent fails.
+- Model choice: **sonnet** for simple/mechanical tasks; **opus** for heavy tasks (non-trivial design, tricky refactors, anything a sonnet attempt has failed at). Start with sonnet; escalate to opus when warranted.
 - Test style: plain `pytest` functions with `@pytest.mark.parametrize`; no test classes.
 - **Every agent must read `AGENTS.md` at the start of its task.**
 

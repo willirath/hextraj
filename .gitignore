@@ -69,8 +69,8 @@ target/
 # VS Code
 .vscode/
 
-# Claude Code — personal overrides only; project-level settings.json is committed
-.claude/settings.local.json
+# Claude Code — local agent config, not committed
+.claude/
 
 # Spyder
 .spyproject/

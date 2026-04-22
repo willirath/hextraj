@@ -3759,14 +3759,13 @@ packages:
 - pypi: ./
   name: hextraj
   version: 2026.3.2.1
-  sha256: 7ed32975aaddc393bafa81a03001f719a2f6cdbfe50dfed10ff3f33e0cb16514
+  sha256: d8482f260ad1c46ecbd1d6d883f39bce5ec93f0999ef448cfc52cf107d3de410
   requires_dist:
   - numpy
   - pyproj
   - xarray
   - geopandas
   - shapely
-  - hextraj ; extra == 'full'
   - dask ; extra == 'full'
   - scipy ; extra == 'full'
   - cartopy ; extra == 'full'

@@ -95,9 +95,10 @@ def hex_corner_offset(layout, corner):
 
 
 def hex_round(hex: Hex):
-    qi = np.round(hex.q).astype(int)
-    ri = np.round(hex.r).astype(int)
-    si = np.round(hex.s).astype(int)
+    with np.errstate(invalid="ignore"):
+        qi = np.round(hex.q).astype(int)
+        ri = np.round(hex.r).astype(int)
+        si = np.round(hex.s).astype(int)
     q_diff = abs(qi - hex.q)
     r_diff = abs(ri - hex.r)
     s_diff = abs(si - hex.s)

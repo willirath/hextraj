@@ -25,7 +25,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-full = ["hextraj", "dask", "scipy", "cartopy"]
+full = ["dask", "scipy", "cartopy"]
 dev  = ["hextraj[full]", "pytest", "pytest-cov"]
 
 [project.urls]

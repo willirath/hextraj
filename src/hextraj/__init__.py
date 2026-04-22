@@ -5,4 +5,4 @@ hex_connectivity_dask.
 """
 
 from .hexproj import HexProj
-from .hex_analysis import hex_counts, hex_connectivity, hex_connectivity_power, hex_connectivity_dask
+from .hex_analysis import hex_counts, hex_counts_lazy, hex_connectivity, hex_connectivity_power, hex_connectivity_dask

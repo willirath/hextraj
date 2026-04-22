@@ -6,6 +6,8 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 import geopandas as gpd
+import dask
+import dask.dataframe as dd
 from shapely.geometry import LineString
 
 from . import redblobhex_array as redblobhex
@@ -58,8 +60,6 @@ def hex_connectivity_dask(
         INVALID_HEX_ID (-1) appears in from_id or to_id wherever the input
         lon/lat values are NaN.
     """
-    import dask.dataframe as dd
-
     # Rechunk obs to full so each partition has all obs steps per trajectory.
     ds = ds.chunk({obs_dim: -1})
 
@@ -110,89 +110,203 @@ def hex_connectivity_dask(
     return ddf
 
 
-def hex_counts(
-    hex_ids: xr.DataArray | pd.Series,
-    reduce_dims: str | list[str] | None = None,
-    hp: HexProj | None = None,
-) -> gpd.GeoDataFrame:
-    """Count hex visits, optionally reducing over specified dimensions.
+def hex_counts_lazy(
+    hex_ids,
+    reduce_dims=None,
+):
+    """Lazy count-only form of hex_counts.  No geometry.
 
-    Args:
-        hex_ids: xr.DataArray of int64 hex IDs, or pd.Series of hex IDs.
-        reduce_dims: Dimension name(s) to sum over. Ignored for Series input.
-                     If None and hex_ids is a DataArray, no reduction occurs.
-        hp: Optional HexProj instance to compute polygon geometries.
-            If None, creates a default HexProj for geometry computation.
+    Returns count tables without materialising geometry.  Suitable for
+    streaming to parquet or zarr:
+    ``hex_counts_lazy(hex_ids).to_parquet("counts.parquet")``.
 
-    Returns:
-        GeoDataFrame with:
-        - Index: "hex_id" (if all dims reduced) or MultiIndex with unreduced dims + "hex_id"
-        - Column "count": visit count
-        - Column "geometry": Polygon for valid hex, None for INVALID_HEX_ID
+    Parameters
+    ----------
+    hex_ids : xr.DataArray, pd.Series, or dd.Series
+        Hex IDs to count.  For xr.DataArray inputs the array must contain
+        int64 values produced by HexProj.label.  INVALID_HEX_ID (-1) is
+        preserved as an ordinary value.
+    reduce_dims : str, list[str], or None
+        Dimensions to aggregate over.  ``None`` (default) and ``[]`` both
+        mean *reduce all dims* — the result is a Series indexed by hex_id.
+        A non-empty list specifies which dims to collapse; remaining dims
+        become columns in the returned DataFrame.
+
+        For pd.Series / dd.Series inputs this parameter is ignored.
+
+    Returns
+    -------
+    dd.Series or pd.Series
+        Full reduction (reduce_dims is None, [], or covers all dims):
+        Series indexed by ``hex_id``, values are counts.  Returns a dask
+        Series for dask-backed inputs, an eager pandas Series otherwise.
+    dd.DataFrame or pd.DataFrame
+        Partial reduction: DataFrame with columns ``(*keep_dims, "hex_id",
+        "count")``.  Parquet/zarr-writable without further reshaping.
+        Returns a dask DataFrame for dask-backed inputs, pandas otherwise.
+
+    Notes
+    -----
+    INVALID_HEX_ID (-1) is preserved as an ordinary row.
+
+    Performance is best when ``hex_ids`` is chunked along ``keep_dims``.
+    Misalignment triggers a dask shuffle during aggregation.
+
+    The lazy result is unsorted; call ``.compute().sort_index()`` or
+    ``hex_counts(...)`` for a sorted, geometry-attached GeoDataFrame.
     """
-    # Use default HexProj if none provided
-    if hp is None:
-        hp = HexProj()
-
-    # Handle Series input: just do value_counts directly
-    if isinstance(hex_ids, pd.Series):
+    # Series inputs: short-circuit directly to value_counts.
+    if isinstance(hex_ids, (pd.Series, dd.Series)):
         counts = hex_ids.value_counts(sort=False)
-        result_gdf = _build_counts_geodataframe(counts.index.values, counts.values, hp)
-        result_gdf.index.name = "hex_id"
-        return result_gdf
+        counts.index.name = "hex_id"
+        return counts
 
-    # Handle DataArray input
-    if reduce_dims is None:
-        reduce_dims = []
-    elif isinstance(reduce_dims, str):
+    if not isinstance(hex_ids, xr.DataArray):
+        raise TypeError(
+            f"hex_ids must be xr.DataArray, pd.Series, or dd.Series; got {type(hex_ids)}"
+        )
+
+    # Normalise reduce_dims.
+    if isinstance(reduce_dims, str):
         reduce_dims = [reduce_dims]
+    elif reduce_dims is None or len(reduce_dims) == 0:
+        reduce_dims = list(hex_ids.dims)
 
     all_dims = list(hex_ids.dims)
     keep_dims = [d for d in all_dims if d not in reduce_dims]
 
+    # Full reduction: collapse to a single Series.
     if not keep_dims:
-        # Reduce over all dimensions
-        hex_array = hex_ids.values.ravel()
-        counts = pd.Series(hex_array).value_counts(sort=False)
-        result_gdf = _build_counts_geodataframe(counts.index.values, counts.values, hp)
-        result_gdf.index.name = "hex_id"
-        return result_gdf
+        # Wrap in dataset and convert to dask dataframe — never touch .values.
+        if not dask.is_dask_collection(hex_ids):
+            hex_ids = hex_ids.chunk(hex_ids.sizes)
+        ds = hex_ids.to_dataset(name="__hex_id__")
+        ddf = ds.to_dask_dataframe(dim_order=list(hex_ids.dims))
+        counts = ddf["__hex_id__"].value_counts(sort=False)
+        counts.index.name = "hex_id"
+        # For numpy-backed DataArrays, compute eagerly.
+        if not dask.is_dask_collection(hex_ids.data):
+            counts = counts.compute()
+        return counts
 
-    # Partial reduction: group by keep_dims
-    results = []
-    index_tuples = []
+    # Partial reduction.
+    if not dask.is_dask_collection(hex_ids):
+        hex_ids = hex_ids.chunk(hex_ids.sizes)
 
-    for coords, group_data in hex_ids.groupby(keep_dims):
-        if isinstance(coords, (int, np.integer)):
-            coords = (coords,)
-        hex_array = group_data.values.ravel()
-        counts = pd.Series(hex_array).value_counts(sort=False)
-        for hex_id, count in counts.items():
-            index_tuples.append(coords + (hex_id,))
-            results.append(count)
+    dim_order = keep_dims + [d for d in all_dims if d in reduce_dims]
 
-    # Build result DataFrame
-    if not results:
-        # Empty case
-        return gpd.GeoDataFrame(
-            {"count": [], "geometry": []},
-            index=pd.MultiIndex.from_tuples([], names=keep_dims + ["hex_id"]),
-            crs="EPSG:4326"
-        )
+    var_dict = {"__hex_id__": hex_ids}
+    for d in keep_dims:
+        coord = hex_ids.coords.get(d, xr.DataArray(np.arange(hex_ids.sizes[d]), dims=[d]))
+        var_dict[d] = coord.broadcast_like(hex_ids)
 
-    # Convert to proper format for MultiIndex.from_tuples (list of tuples)
-    hex_ids_flat = np.array([t[-1] for t in index_tuples], dtype=np.int64)
-    counts_array = np.array(results)
+    mini_ds = xr.Dataset(var_dict)
+    ddf = mini_ds.to_dask_dataframe(dim_order=dim_order)
+    counts = ddf.groupby(keep_dims + ["__hex_id__"]).size().rename("count")
+    counts = counts.reset_index()
+    counts = counts.rename(columns={"__hex_id__": "hex_id"})
 
-    result_gdf = _build_counts_geodataframe(hex_ids_flat, counts_array, hp)
+    # For numpy-backed DataArrays, compute eagerly.
+    if not dask.is_dask_collection(hex_ids.data):
+        counts = counts.compute()
 
-    # Construct MultiIndex from the index tuples
-    multi_index = pd.MultiIndex.from_tuples(
-        index_tuples,
-        names=keep_dims + ["hex_id"]
-    )
-    result_gdf.index = multi_index
-    return result_gdf
+    return counts
+
+
+def _attach_geometry(counts, hp):
+    """Compute polygon geometry for each hex and attach to the counts table.
+
+    Parameters
+    ----------
+    counts : pd.Series or pd.DataFrame (or dask equivalents)
+        Output of hex_counts_lazy: Series indexed by hex_id (full reduction)
+        or DataFrame with columns (*keep_dims, "hex_id", "count") (partial).
+    hp : HexProj
+        Used to build polygon geometries via the batched to_geodataframe path.
+
+    Returns
+    -------
+    gpd.GeoDataFrame
+        Eager GeoDataFrame with count and geometry columns.
+        Full reduction: single-level index named "hex_id", sorted.
+        Partial reduction: MultiIndex (*keep_dims, "hex_id"), sorted.
+        INVALID_HEX_ID rows have geometry=None.
+    """
+    if dask.is_dask_collection(counts):
+        counts = counts.compute()
+
+    if isinstance(counts, pd.Series):
+        hex_id_values = counts.index.to_numpy()
+        unique_ids = np.unique(hex_id_values)
+        geo = hp.to_geodataframe(unique_ids)
+        geometries = geo.geometry.reindex(hex_id_values).values
+        result = gpd.GeoDataFrame(
+            {"count": counts.to_numpy(), "geometry": geometries},
+            index=pd.Index(hex_id_values, name="hex_id"),
+            crs="EPSG:4326",
+        ).sort_index()
+        return result
+
+    # DataFrame path: columns (*keep_dims, "hex_id", "count")
+    hex_id_values = counts["hex_id"].to_numpy()
+    unique_ids = np.unique(hex_id_values)
+    geo = hp.to_geodataframe(unique_ids)
+    geometries = geo.geometry.reindex(hex_id_values).values
+    keep_dims = [c for c in counts.columns if c not in ("hex_id", "count")]
+    index = pd.MultiIndex.from_frame(counts[keep_dims + ["hex_id"]])
+    result = gpd.GeoDataFrame(
+        {"count": counts["count"].to_numpy(), "geometry": geometries},
+        index=index,
+        crs="EPSG:4326",
+    ).sort_index()
+    return result
+
+
+def hex_counts(
+    hex_ids,
+    reduce_dims=None,
+    hp=None,
+):
+    """Count hex visits, optionally keeping a subset of dims as index levels.
+
+    Parameters
+    ----------
+    hex_ids : xr.DataArray, pd.Series, or dd.Series
+        Hex IDs to count.  Must contain int64 values (from HexProj.label).
+        INVALID_HEX_ID (-1) is preserved as an ordinary row with
+        geometry=None.
+    reduce_dims : str, list[str], or None
+        Dimensions to aggregate over.  ``None`` (default) and ``[]`` both
+        mean *reduce all dims* — the result has a flat "hex_id" index.
+        A non-empty list specifies which dims to collapse; remaining dims
+        become leading levels of the MultiIndex.
+
+        For pd.Series / dd.Series inputs this parameter is ignored.
+    hp : HexProj or None
+        Instance used for polygon geometry.  If None a default HexProj is
+        created.
+
+    Returns
+    -------
+    gpd.GeoDataFrame
+        Full reduction: single-level index named "hex_id", sorted by hex_id.
+        Columns: ``count`` (int64), ``geometry`` (Polygon or None).
+
+        Partial reduction: MultiIndex (*keep_dims, "hex_id"), sorted.
+        Same columns.
+
+    Notes
+    -----
+    Aggregation is lazy for dask-backed inputs; the small count table is
+    materialised and decorated with hex polygon geometry on return.
+
+    INVALID_HEX_ID (-1) is preserved as an ordinary row with geometry=None.
+    """
+    if hp is None:
+        hp = HexProj()
+
+    counts = hex_counts_lazy(hex_ids, reduce_dims=reduce_dims)
+    return _attach_geometry(counts, hp)
 
 
 def _build_edge_geometries(
@@ -391,40 +505,3 @@ def hex_connectivity_power(
         index=multi_index,
         crs="EPSG:4326",
     )
-
-
-def _build_counts_geodataframe(
-    hex_ids_array: np.ndarray,
-    counts_array: np.ndarray,
-    hp: HexProj,
-) -> gpd.GeoDataFrame:
-    """Build GeoDataFrame from hex IDs and their counts.
-
-    Args:
-        hex_ids_array: 1D array of int64 hex IDs.
-        counts_array: 1D array of counts.
-        hp: HexProj instance for computing geometries.
-
-    Returns:
-        GeoDataFrame with index=hex_ids_array, count and geometry columns.
-    """
-    from shapely.geometry import Polygon
-
-    geometries = []
-    for hex_id in hex_ids_array:
-        if hex_id == INVALID_HEX_ID:
-            geometries.append(None)
-        else:
-            q, r = decode_hex_id(hex_id)
-            hex_obj = redblobhex.Hex(q, r, -q - r)
-            corners_lon_lat = hp.hex_corners_lon_lat(hex_obj)
-            # Convert to polygon (first and last corners are identical)
-            coords = [(lon, lat) for lon, lat in corners_lon_lat[:-1]]
-            geometries.append(Polygon(coords))
-
-    result_gdf = gpd.GeoDataFrame(
-        {"count": counts_array, "geometry": geometries},
-        index=hex_ids_array,
-        crs="EPSG:4326"
-    )
-    return result_gdf

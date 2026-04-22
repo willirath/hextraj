@@ -1,6 +1,7 @@
 # hextraj
 
 [![License:MIT](https://img.shields.io/badge/License-MIT-lightgray.svg?style=flt-square)](LICENSE)
+[![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://willirath.github.io/hextraj/)
 
 Hex labelling of trajectory data.
 

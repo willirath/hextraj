@@ -93,3 +93,5 @@ external/
 # Mypy cache
 .mypy_cache/
 _version.py
+site/
+.jupyter_cache/

@@ -1,3 +1,5 @@
+"""HexProj class for projecting lon/lat coordinates onto a hexagonal grid."""
+
 from __future__ import annotations
 
 from collections.abc import Iterator
@@ -15,6 +17,13 @@ from .hex_id import encode_hex_id, decode_hex_id, INVALID_HEX_ID
 
 
 class HexProj:
+    """Maps lon/lat coordinates to hexagonal grid cells via a configurable projection.
+
+    Uses a pyproj projection (default: Lambert Azimuthal Equal-Area) to convert
+    geographic coordinates to a flat-plane hex grid with axial (q, r) coordinates
+    and integer hex IDs.
+    """
+
     def __init__(
         self,
         projection_name: str = "laea",
@@ -86,8 +95,8 @@ class HexProj:
         """Map lon/lat to hex axial coordinates (SoA).
 
         Args:
-            lon: Longitude or array of longitudes.
-            lat: Latitude or array of latitudes.
+            lon (float or array-like): Longitude or array of longitudes.
+            lat (float or array-like): Latitude or array of latitudes.
 
         Returns:
             Hex namedtuple with arrays q, r, s.
@@ -126,7 +135,7 @@ class HexProj:
         """Map hex axial coordinates to lon/lat.
 
         Args:
-            hex_tuple: (q, r) or (q, r, s). s is computed if omitted.
+            hex_tuple (tuple): (q, r) or (q, r, s). s is computed if omitted.
 
         Returns:
             Tuple (lon, lat) of arrays.
@@ -146,7 +155,7 @@ class HexProj:
         """Return corner lon/lat coordinates for a hex.
 
         Args:
-            hex_tuple: Hex namedtuple.
+            hex_tuple (Hex): Hex namedtuple with q, r, s axial coordinates.
 
         Returns:
             List of 7 (lon, lat) tuples (first and last are identical).

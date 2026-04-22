@@ -28,11 +28,19 @@ jupyter = "*"
 nbconvert = "*"
 mypy = "*"
 pooch = "*"
+sphinx = ">=7.0"
+sphinx-book-theme = ">=1.2.0"
+myst-nb = ">=1.4.0"
+sphinx-autoapi = ">=3.8"
+sphinx-copybutton = "*"
+sphinx-autobuild = "*"
 
 [feature.dev.tasks]
 test = "pytest --cov --cov-report=term-missing"
 mypy = "mypy src/hextraj/"
 fetch-external = "python scripts/fetch_external_data.py"
+docs-build = "sphinx-build -b html docs docs/_build/html"
+docs-serve = "sphinx-autobuild docs docs/_build/html"
 
 [environments]
 default = { features = ["full", "dev"], solve-group = "default" }

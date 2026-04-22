@@ -1,3 +1,5 @@
+"""Aggregation and connectivity analysis functions for hex-labelled trajectory data."""
+
 from __future__ import annotations
 
 import numpy as np

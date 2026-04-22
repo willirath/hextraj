@@ -11,6 +11,12 @@ Hex labelling of trajectory data.
 
 Maps lon/lat positions to a projected hexagonal grid and provides tools for aggregation and connectivity analysis.
 
+- `hex_counts` — heat maps and density aggregation
+- `hex_connectivity` — origin-destination matrices
+- `hex_connectivity_power` — multi-generation transport probabilities
+- `hex_connectivity_dask` — lazy dask-native connectivity for large datasets
+- Full dask support throughout
+
 ## Getting started
 
 Explore the notebooks:
@@ -18,11 +24,19 @@ Explore the notebooks:
 - [`hex_conn.ipynb`](notebooks/hex_conn.ipynb) — Label NW Shelf trajectories, compute OD connectivity, visualise choropleth + edge overlay.
 - [`hex_aggregation.ipynb`](notebooks/hex_aggregation.ipynb) — Grid construction, choropleth aggregation, and weighted edges.
 - [`hex_grid_construction.ipynb`](notebooks/hex_grid_construction.ipynb) — Rectangle and region hex grids.
+- [`hex_analysis.ipynb`](notebooks/hex_analysis.ipynb) — Analysis functions (`hex_counts`, `hex_connectivity`, `hex_connectivity_power`).
+- [`hex_conn_dask.ipynb`](notebooks/hex_conn_dask.ipynb) — Dask-native connectivity for large datasets.
 
 ## Installation
 
 ```shell
 python -m pip install git+https://github.com/willirath/hextraj.git@main
+```
+
+For dask, scipy, and cartopy support:
+
+```shell
+python -m pip install "hextraj[full] @ git+https://github.com/willirath/hextraj.git@main"
 ```
 
 ## Quick example

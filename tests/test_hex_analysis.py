@@ -420,19 +420,6 @@ def test_hex_connectivity_power_n0(hex_ids, hp):
 
 
 # ---------------------------------------------------------------------------
-# hex_counts — empty reduce_dims edge case
-# ---------------------------------------------------------------------------
-
-
-def test_hex_counts_empty_reduce_dims(hex_ids):
-    result = hex_counts(hex_ids, reduce_dims=[])
-    # reduce_dims=[] means no reduction; should return one row per element with count=1
-    # hex_ids has shape (5, 2), so 10 rows total
-    assert len(result) == 10
-    assert all(result["count"] == 1)
-
-
-# ---------------------------------------------------------------------------
 # hex_connectivity_power — condition_on_valid drops invalid column
 # ---------------------------------------------------------------------------
 

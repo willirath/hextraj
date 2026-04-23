@@ -98,3 +98,7 @@ external/
 _version.py
 site/
 .jupyter_cache/
+
+# Pixi
+.pixi/
+pixi.lock

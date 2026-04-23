@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=64"]
+requires = ["setuptools>=64", "setuptools_scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
@@ -8,9 +8,11 @@ where = ["src"]
 [tool.setuptools.package-data]
 hextraj = ["data/**/*"]
 
+[tool.setuptools_scm]
+
 [project]
 name = "hextraj"
-version = "2026.04.22.2"
+dynamic = ["version"]
 description = "Hex labelling of trajectory data"
 readme = "README.md"
 license = { file = "LICENSE" }

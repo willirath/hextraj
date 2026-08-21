@@ -8,15 +8,20 @@ abstract: >-
   NumPy, pandas, xarray, and dask objects, so the same code runs on a single
   array or on datasets larger than memory.
 type: software
-version: 2026.08.21.1
+version: 2026.08.21.2
 date-released: "2026-08-21"
 license: MIT
+doi: 10.5281/zenodo.22040740
 authors:
   - given-names: Willi
     family-names: Rath
     email: wrath@geomar.de
     affiliation: GEOMAR Helmholtz Centre for Ocean Research Kiel
     orcid: "https://orcid.org/0000-0003-1951-8494"
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.22040740
+    description: Concept DOI, resolves to the most recent release
 repository-code: "https://github.com/willirath/hextraj"
 url: "https://willirath.github.io/hextraj/"
 keywords:

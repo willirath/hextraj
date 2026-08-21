@@ -43,13 +43,14 @@ classifiers = [
 dependencies = [
     "numpy",
     "pyproj",
+    "pandas",
     "xarray",
     "geopandas",
     "shapely",
 ]
 
 [project.optional-dependencies]
-full = ["dask", "scipy", "cartopy"]
+full = ["dask[dataframe]"]
 dev  = ["hextraj[full]", "pytest", "pytest-cov"]
 
 [project.urls]

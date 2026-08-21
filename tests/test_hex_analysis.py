@@ -7,7 +7,12 @@ from shapely.geometry import LineString, Polygon
 
 from hextraj.hexproj import HexProj
 from hextraj.hex_id import INVALID_HEX_ID
-from hextraj.hex_analysis import hex_counts, hex_connectivity, hex_connectivity_power
+from hextraj.hex_analysis import (
+    hex_counts,
+    hex_counts_lazy,
+    hex_connectivity,
+    hex_connectivity_power,
+)
 
 
 @pytest.fixture
@@ -432,3 +437,17 @@ def test_hex_connectivity_power_condition_drops_invalid_column(hex_ids_invalid, 
     to_ids = result.index.get_level_values("to_id")
     assert INVALID_HEX_ID not in from_ids
     assert INVALID_HEX_ID not in to_ids
+
+
+def test_hex_counts_lazy_rejects_unsupported_type():
+    """Anything other than a DataArray or Series must raise, not coerce."""
+    with pytest.raises(TypeError, match="must be xr.DataArray"):
+        hex_counts_lazy(np.array([1, 2, 3]))
+
+
+def test_hex_counts_lazy_accepts_reduce_dims_as_string(hex_ids):
+    """A bare dim name means the same as a one-element list."""
+    from_string = hex_counts_lazy(hex_ids, reduce_dims="obs")
+    from_list = hex_counts_lazy(hex_ids, reduce_dims=["obs"])
+
+    assert from_string.equals(from_list)

@@ -64,6 +64,14 @@ minversion = "6.0"
 addopts = "-v"
 testpaths = ["tests"]
 
+[tool.coverage.run]
+source = ["src/hextraj"]
+# Vendored hex math from redblobgames.com (CC0). Excluded from mypy too.
+omit = ["*/hextraj/redblobhex.py", "*/hextraj/redblobhex_array.py"]
+
+[tool.coverage.report]
+show_missing = true
+
 [tool.mypy]
 ignore_missing_imports = true
 exclude = ["src/hextraj/redblobhex\\.py", "src/hextraj/redblobhex_array\\.py"]

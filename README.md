@@ -1,7 +1,9 @@
 # hextraj
 
+[![Tests](https://github.com/willirath/hextraj/actions/workflows/tests.yml/badge.svg)](https://github.com/willirath/hextraj/actions/workflows/tests.yml)
 [![PyPI](https://img.shields.io/pypi/v/hextraj)](https://pypi.org/project/hextraj/)
-[![License:MIT](https://img.shields.io/badge/License-MIT-lightgray.svg?style=flt-square)](LICENSE)
+[![Python](https://img.shields.io/pypi/pyversions/hextraj)](https://pypi.org/project/hextraj/)
+[![License:MIT](https://img.shields.io/badge/License-MIT-lightgray.svg?style=flt-square)](https://github.com/willirath/hextraj/blob/main/LICENSE)
 [![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://willirath.github.io/hextraj/)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22040740.svg)](https://doi.org/10.5281/zenodo.22040740)
 

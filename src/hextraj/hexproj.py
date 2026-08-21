@@ -7,7 +7,6 @@ from typing import cast
 
 import numpy as np
 import pyproj
-import xarray as xr
 
 from numpy.typing import ArrayLike, NDArray
 

@@ -17,8 +17,6 @@ hextraj = { path = ".", editable = true }
 
 [feature.full.dependencies]
 dask = "*"
-scipy = "*"
-cartopy = "*"
 zarr = "<3"
 
 [feature.dev.dependencies]
@@ -28,6 +26,7 @@ jupyter = "*"
 nbconvert = "*"
 mypy = "*"
 pooch = "*"
+cartopy = "*"
 sphinx = ">=7.0"
 sphinx-book-theme = ">=1.2.0"
 myst-nb = ">=1.4.0"

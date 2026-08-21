@@ -38,7 +38,7 @@ Explore the notebooks:
 pip install hextraj
 ```
 
-With dask, scipy, and cartopy:
+For full support, including the optional secondary dependencies:
 
 ```shell
 pip install hextraj[full]

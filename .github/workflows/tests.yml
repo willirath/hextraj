@@ -29,3 +29,36 @@ jobs:
 
       - name: Run tests
         run: pixi run test
+
+  wheel-import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build
+        run: pip install build
+
+      - name: Build wheel
+        run: python -m build --wheel
+
+      - name: Install wheel (no extras) and test import
+        run: |
+          python -m venv /tmp/venv-minimal
+          source /tmp/venv-minimal/bin/activate
+          WHEEL=$(ls dist/*.whl)
+          pip install "$WHEEL"
+          python -c "import hextraj; import pandas as pd; hp = hextraj.HexProj(); labels = pd.Series([1, 2, 3]); result = hextraj.hex_counts(labels, hp=hp); print('minimal smoke test OK:', type(result).__name__)"
+
+      - name: Install wheel with [full] and test dask import
+        run: |
+          python -m venv /tmp/venv-full
+          source /tmp/venv-full/bin/activate
+          WHEEL=$(ls dist/*.whl)
+          pip install "${WHEEL}[full]"
+          python -c "import hextraj; import dask.dataframe; print('full import OK')"

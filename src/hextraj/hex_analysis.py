@@ -2,18 +2,40 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 import pandas as pd
 import xarray as xr
 import geopandas as gpd
-import dask
-import dask.array as da
-import dask.dataframe as dd
 from shapely.geometry import LineString
 
 from . import redblobhex_array as redblobhex
 from .hex_id import INVALID_HEX_ID, decode_hex_id
 from .hexproj import HexProj
+
+# TYPE_CHECKING is False at run time, so this import never executes; it only
+# gives the type checker the ``dd`` name used in the annotations below.
+if TYPE_CHECKING:
+    import dask.dataframe as dd
+
+
+def _is_dask_collection(obj):
+    """Return whether obj is a dask collection, False when dask is absent."""
+    try:
+        import dask
+    except ImportError:
+        return False
+    return dask.is_dask_collection(obj)
+
+
+def _dask_series_types():
+    """Return (dd.Series,) when dask.dataframe imports, () otherwise."""
+    try:
+        import dask.dataframe as dd
+    except ImportError:
+        return ()
+    return (dd.Series,)
 
 
 def hex_connectivity_dask(
@@ -136,7 +158,7 @@ def hex_counts_lazy(
         aggregation; no silent rechunking is performed.
     """
     # Series inputs: short-circuit directly to value_counts.
-    if isinstance(hex_ids, (pd.Series, dd.Series)):
+    if isinstance(hex_ids, (pd.Series, *_dask_series_types())):
         counts = hex_ids.value_counts(sort=False)
         counts.index.name = "hex_id"
         return counts
@@ -161,7 +183,7 @@ def hex_counts_lazy(
 
     all_dims = list(hex_ids.dims)
     keep_dims = [d for d in all_dims if d not in reduce_dims]
-    is_dask_backed = dask.is_dask_collection(hex_ids)
+    is_dask_backed = _is_dask_collection(hex_ids)
 
     # Convert to dataframe (dask or pandas).
     ds = hex_ids.to_dataset(name="hex_id")
@@ -190,7 +212,7 @@ def _attach_geometry(counts, hp: HexProj) -> gpd.GeoDataFrame:
     ``INVALID_HEX_ID`` rows carry ``geometry=None``. Result is sorted
     by index.
     """
-    if dask.is_dask_collection(counts):
+    if _is_dask_collection(counts):
         counts = counts.compute()
 
     if isinstance(counts, pd.Series):
@@ -329,12 +351,16 @@ def hex_connectivity(
     from_slice = hex_ids.isel({from_dim: from_idx})
     to_slice = hex_ids.isel({to_dim: to_idx})
 
-    is_dask = dask.is_dask_collection(hex_ids.data) or (
-        weight is not None and dask.is_dask_collection(weight.data)
+    is_dask = _is_dask_collection(hex_ids.data) or (
+        weight is not None and _is_dask_collection(weight.data)
     )
 
     from_flat = from_slice.data.ravel()
     to_flat = to_slice.data.ravel()
+
+    if is_dask:
+        import dask.array as da
+        import dask.dataframe as dd
 
     if weight is not None:
         w_flat = weight.isel({to_dim: to_idx}).data.ravel().astype(float)

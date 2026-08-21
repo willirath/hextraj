@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=64", "setuptools_scm>=8"]
+requires = ["setuptools>=77", "setuptools_scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
@@ -15,9 +15,31 @@ name = "hextraj"
 dynamic = ["version"]
 description = "Hex labelling of trajectory data"
 readme = "README.md"
-license = { file = "LICENSE" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Willi Rath", email = "wrath@geomar.de" }]
 requires-python = ">=3.10"
+keywords = [
+    "hexagonal grid",
+    "trajectory analysis",
+    "connectivity",
+    "oceanography",
+    "geospatial",
+    "xarray",
+    "dask",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: GIS",
+    "Topic :: Scientific/Engineering :: Oceanography",
+]
 dependencies = [
     "numpy",
     "pyproj",

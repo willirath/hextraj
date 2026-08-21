@@ -1,0 +1,41 @@
+{
+    "title": "hextraj: hex labelling of trajectory data",
+    "description": "<p>hextraj maps longitude/latitude positions onto a projected hexagonal grid and provides tools for aggregating trajectory data over hex cells and for computing origin-destination connectivity between them.</p><p>It operates on NumPy, pandas, xarray, and dask objects, so the same code runs on a single array or on datasets larger than memory. Core entry points are <code>HexProj</code> for grid construction and labelling, <code>hex_counts</code> for density aggregation, <code>hex_connectivity</code> and <code>hex_connectivity_dask</code> for origin-destination matrices, and <code>hex_connectivity_power</code> for multi-generation transport probabilities.</p><p>Documentation: <a href=\"https://willirath.github.io/hextraj/\">https://willirath.github.io/hextraj/</a></p>",
+    "upload_type": "software",
+    "access_right": "open",
+    "license": "mit",
+    "language": "eng",
+    "creators": [
+        {
+            "name": "Rath, Willi",
+            "orcid": "0000-0003-1951-8494",
+            "affiliation": "GEOMAR Helmholtz Centre for Ocean Research Kiel"
+        }
+    ],
+    "keywords": [
+        "hexagonal grid",
+        "trajectory analysis",
+        "Lagrangian",
+        "connectivity",
+        "origin-destination matrix",
+        "oceanography",
+        "geospatial",
+        "xarray",
+        "dask",
+        "Python"
+    ],
+    "related_identifiers": [
+        {
+            "identifier": "https://pypi.org/project/hextraj/",
+            "relation": "isIdenticalTo",
+            "resource_type": "software",
+            "scheme": "url"
+        },
+        {
+            "identifier": "https://willirath.github.io/hextraj/",
+            "relation": "isDocumentedBy",
+            "resource_type": "publication-softwaredocumentation",
+            "scheme": "url"
+        }
+    ]
+}

@@ -80,8 +80,7 @@ def test_hex_corners_lon_lat_returns_closed_ring_of_seven(orientation):
     corners = hex_proj.hex_corners_lon_lat(Hex(0, 0, 0))
 
     assert len(corners) == 7
-    # Closes to floating-point precision rather than exactly.
-    assert np.allclose(corners[0], corners[-1])
+    assert corners[0] == corners[-1]
 
 
 @pytest.mark.parametrize("orientation", ["flat", "pointy"])
@@ -97,3 +96,40 @@ def test_hex_corners_lon_lat_surround_the_origin(orientation):
 
     assert lons.min() < 0.0 < lons.max()
     assert lats.min() < 0.0 < lats.max()
+
+
+@pytest.mark.parametrize("orientation", ["flat", "pointy"])
+def test_hex_corner_offsets_close_the_ring_exactly(orientation):
+    """The closing offset must be bit-identical to the first, not recomputed."""
+    hex_proj = HexProj(
+        lon_origin=0,
+        lat_origin=0,
+        hex_size_meters=100_000,
+        hex_orientation=orientation,
+    )
+
+    assert hex_proj.corner_offsets_x[0] == hex_proj.corner_offsets_x[-1]
+    assert hex_proj.corner_offsets_y[0] == hex_proj.corner_offsets_y[-1]
+
+
+@pytest.mark.parametrize("orientation", ["flat", "pointy"])
+def test_to_geodataframe_polygons_have_no_degenerate_vertex(orientation):
+    """A closed hexagon is seven coordinates; an eighth means a degenerate edge.
+
+    Shapely appends a closing vertex when the last coordinate does not
+    equal the first exactly, which leaves a zero-length edge behind.
+    """
+    hex_proj = HexProj(
+        lon_origin=0,
+        lat_origin=0,
+        hex_size_meters=100_000,
+        hex_orientation=orientation,
+    )
+    hex_ids = hex_proj.label(
+        np.array([0.0, 5.0, -12.0, 30.0]), np.array([0.0, 40.0, -33.0, 60.0])
+    )
+
+    for geom in hex_proj.to_geodataframe(hex_ids).geometry:
+        coords = np.asarray(geom.exterior.coords)
+        assert len(coords) == 7
+        assert np.array_equal(coords[0], coords[-1])

@@ -73,8 +73,13 @@ class HexProj:
         )
 
         corner_offsets = tuple(
-            redblobhex.hex_corner_offset(self.hex_layout_projected, c) for c in range(7)
+            redblobhex.hex_corner_offset(self.hex_layout_projected, c) for c in range(6)
         )
+        # Close the ring with an exact copy of the first corner. Recomputing it as
+        # corner 6 shifts the angle by 2*pi, which sin and cos do not undo exactly.
+        # Shapely then misses that the ring is closed and appends a vertex, leaving
+        # a zero-length edge on every polygon.
+        corner_offsets += (corner_offsets[0],)
         self.corner_offsets_projected = corner_offsets
         self.corner_offsets_x = np.array([p.x for p in corner_offsets])
         self.corner_offsets_y = np.array([p.y for p in corner_offsets])

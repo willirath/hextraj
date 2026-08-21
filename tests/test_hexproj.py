@@ -66,3 +66,34 @@ def test_check_orientations_available():
     hp_pointy = HexProj(hex_orientation="pointy")
     with pytest.raises(ValueError, match="Only 'flat' and 'pointy'"):
         hp_nonexistent = HexProj(hex_orientation="nonexistent")
+
+
+@pytest.mark.parametrize("orientation", ["flat", "pointy"])
+def test_hex_corners_lon_lat_returns_closed_ring_of_seven(orientation):
+    """The seventh corner repeats the first so the polygon closes."""
+    hex_proj = HexProj(
+        lon_origin=0,
+        lat_origin=0,
+        hex_size_meters=100_000,
+        hex_orientation=orientation,
+    )
+    corners = hex_proj.hex_corners_lon_lat(Hex(0, 0, 0))
+
+    assert len(corners) == 7
+    # Closes to floating-point precision rather than exactly.
+    assert np.allclose(corners[0], corners[-1])
+
+
+@pytest.mark.parametrize("orientation", ["flat", "pointy"])
+def test_hex_corners_lon_lat_surround_the_origin(orientation):
+    """The origin hex is centred on (lon_origin, lat_origin)."""
+    hex_proj = HexProj(
+        lon_origin=0,
+        lat_origin=0,
+        hex_size_meters=100_000,
+        hex_orientation=orientation,
+    )
+    lons, lats = np.array(hex_proj.hex_corners_lon_lat(Hex(0, 0, 0))).T
+
+    assert lons.min() < 0.0 < lons.max()
+    assert lats.min() < 0.0 < lats.max()

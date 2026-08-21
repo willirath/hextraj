@@ -11,6 +11,18 @@ tag of `v2026.09.01.2` reaches PyPI as `2026.9.1.2` and the tag stops matching
 the version users see. Tags up to and including `v2026.08.21.2` predate this
 rule and stay as they are.
 
+## When to release
+
+Release when a change reaches users. That means `src/hextraj/`, or packaging
+metadata in `pyproject.toml` that PyPI displays.
+
+`README.md` reaches users too, because `readme = "README.md"` makes it the PyPI
+long description. A README-only change rides along with the next release rather
+than earning one of its own.
+
+Changes under `dev/`, `tests/`, and `.github/` never reach users, so they call
+for no release at all. Let them accumulate on `main`.
+
 ## Cutting a release
 
 A release is two publishing events. `.github/workflows/release.yml` covers only

@@ -1,0 +1,31 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "hextraj: hex labelling of trajectory data"
+abstract: >-
+  hextraj maps longitude/latitude positions onto a projected hexagonal grid
+  and provides tools for aggregating trajectory data over hex cells and for
+  computing origin-destination connectivity between them. It operates on
+  NumPy, pandas, xarray, and dask objects, so the same code runs on a single
+  array or on datasets larger than memory.
+type: software
+version: 2026.08.21.1
+date-released: "2026-08-21"
+license: MIT
+authors:
+  - given-names: Willi
+    family-names: Rath
+    email: wrath@geomar.de
+    affiliation: GEOMAR Helmholtz Centre for Ocean Research Kiel
+    orcid: "https://orcid.org/0000-0003-1951-8494"
+repository-code: "https://github.com/willirath/hextraj"
+url: "https://willirath.github.io/hextraj/"
+keywords:
+  - hexagonal grid
+  - trajectory analysis
+  - Lagrangian
+  - connectivity
+  - origin-destination matrix
+  - oceanography
+  - geospatial
+  - xarray
+  - dask

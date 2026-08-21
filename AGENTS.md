@@ -6,6 +6,8 @@
 - **Discuss before committing** — present what you did and any findings, wait for the go-ahead.
 - Plans go in `dev/plans/*.md`.
 - Agent-facing documentation goes in `dev/docs/*.md`.
+- Releases follow `dev/docs/releasing.md`. Version numbers carry no leading
+  zeros, and a release needs both a tag push and a GitHub release.
 
 ## Environment
 

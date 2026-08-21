@@ -114,8 +114,7 @@ Core dependencies: numpy, pyproj, pandas, xarray, geopandas, shapely.
 The `[full]` extra declares `dask[dataframe]` to pull pyarrow transitively.
 
 `cartopy` is a development dependency (not in any extra) because it is only
-used in notebooks. `scipy` is not a dependency — it is not imported anywhere
-in src/, tests/, or notebooks/.
+used in notebooks.
 
 `dask` is imported lazily via guarded imports in `hex_analysis.py`, so a base
 install with only the core dependencies imports cleanly.

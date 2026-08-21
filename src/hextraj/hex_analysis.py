@@ -14,6 +14,8 @@ from . import redblobhex_array as redblobhex
 from .hex_id import INVALID_HEX_ID, decode_hex_id
 from .hexproj import HexProj
 
+# TYPE_CHECKING is False at run time, so this import never executes; it only
+# gives the type checker the ``dd`` name used in the annotations below.
 if TYPE_CHECKING:
     import dask.dataframe as dd
 

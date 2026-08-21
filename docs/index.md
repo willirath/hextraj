@@ -16,7 +16,7 @@ Maps lon/lat positions to a projected hexagonal grid and provides tools for aggr
 pip install git+https://github.com/willirath/hextraj.git@main
 ```
 
-For dask support:
+For full support, including the optional secondary dependencies:
 
 ```shell
 pip install "hextraj[full] @ git+https://github.com/willirath/hextraj.git@main"

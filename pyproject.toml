@@ -32,6 +32,10 @@ dev  = ["hextraj[full]", "pytest", "pytest-cov"]
 
 [project.urls]
 Homepage = "https://github.com/willirath/hextraj"
+Documentation = "https://willirath.github.io/hextraj/"
+Repository = "https://github.com/willirath/hextraj"
+# Concept DOI: resolves to the most recent Zenodo release.
+DOI = "https://doi.org/10.5281/zenodo.22040740"
 
 [tool.pytest.ini_options]
 minversion = "6.0"

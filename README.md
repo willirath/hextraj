@@ -3,6 +3,7 @@
 [![PyPI](https://img.shields.io/pypi/v/hextraj)](https://pypi.org/project/hextraj/)
 [![License:MIT](https://img.shields.io/badge/License-MIT-lightgray.svg?style=flt-square)](LICENSE)
 [![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://willirath.github.io/hextraj/)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22040740.svg)](https://doi.org/10.5281/zenodo.22040740)
 
 Hex labelling of trajectory data.
 
@@ -62,3 +63,9 @@ gdf = hp.to_geodataframe(hp.region_of_hexes(region_polygon))
 gdf["count"] = counts.reindex(gdf.index).fillna(0)
 gdf.plot(column="count", cmap="YlOrRd")
 ```
+
+## Citing
+
+Cite hextraj through its DOI. `10.5281/zenodo.22040740` is the concept DOI, and it resolves to the most recent release. Zenodo mints a separate DOI for each release, so use that one to pin an exact version.
+
+[`CITATION.cff`](https://github.com/willirath/hextraj/blob/main/CITATION.cff) holds the same metadata. GitHub renders it as BibTeX or APA under "Cite this repository".
